@@ -19,6 +19,10 @@ export interface Settings {
     /** Client ID прыкладання, якое стрымер стварыў у Spotify Dashboard (ADR-008, ADR-016). Не сакрэт. */
     clientId: string;
   };
+  twitch: {
+    /** Client ID нашага Twitch Application тыпу Public (ADR-004, ADR-018). Не сакрэт; на Этапе 5 будзе ўбудаваны. */
+    clientId: string;
+  };
 }
 
 export const SETTINGS_KEY = 'spotify-bot:settings:v1';
@@ -29,6 +33,7 @@ export function defaultSettings(): Settings {
     audioSource: '',
     rules: { ...DEFAULT_RULES },
     spotify: { clientId: '' },
+    twitch: { clientId: '' },
   };
 }
 
@@ -51,6 +56,7 @@ export function loadSettings(storage: StorageLike | null): Settings {
   const obs = typeof r.obs === 'object' && r.obs ? r.obs : {};
   const rules = typeof r.rules === 'object' && r.rules ? r.rules : {};
   const spotify = typeof r.spotify === 'object' && r.spotify ? r.spotify : {};
+  const twitch = typeof r.twitch === 'object' && r.twitch ? r.twitch : {};
   return {
     obs: {
       url: pick(obs.url, d.obs.url) || d.obs.url,
@@ -66,6 +72,9 @@ export function loadSettings(storage: StorageLike | null): Settings {
     },
     spotify: {
       clientId: pick(spotify.clientId, d.spotify.clientId).trim(),
+    },
+    twitch: {
+      clientId: pick(twitch.clientId, d.twitch.clientId).trim(),
     },
   };
 }

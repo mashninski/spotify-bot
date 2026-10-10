@@ -1,4 +1,4 @@
-// Укладка «Налады»: Spotify, OBS, крыніца гуку, адрас оверлея, правілы заказаў, Twitch.
+// Укладка «Налады»: Spotify, Twitch, OBS, крыніца гуку, адрас оверлея, правілы заказаў.
 
 import { useState } from 'preact/hooks';
 import type { RequestRules } from '../../core/rules';
@@ -6,6 +6,8 @@ import { safeLocalStorage, SIMULATED_AUDIO } from '../../core/settings';
 import { t, type MessageKey } from '../../i18n';
 import { readLoginResult } from '../../providers/spotify/auth';
 import type { SpotifyInfo } from '../../providers/spotify/sync';
+import { isTwitchClientId, readLoginResult as readTwitchLoginResult } from '../../sources/twitch/auth';
+import type { TwitchInfo } from '../../sources/twitch/twitch';
 import { useStore } from '../shared/hooks';
 import { clock } from '../shared/leader';
 import { isClientId, type DockController } from './controller';
@@ -31,6 +33,8 @@ export function SettingsTab({ controller }: { controller: DockController }) {
   return (
     <div class="settings">
       <SpotifySection controller={controller} />
+
+      <TwitchSection controller={controller} />
 
       <Section title={t('settings.obs')} help={t('settings.obs.help')}>
         <label class="field">
@@ -86,14 +90,6 @@ export function SettingsTab({ controller }: { controller: DockController }) {
           />
           <span>{t('settings.rules.allowExplicit')}</span>
         </label>
-      </Section>
-
-      <Section title={t('settings.twitch')} help={t('settings.twitch.help')}>
-        <div class="row-actions">
-          <button class="btn" disabled>
-            {t('settings.twitch.connect')}
-          </button>
-        </div>
       </Section>
     </div>
   );
@@ -241,6 +237,95 @@ function loginErrorText(code: string): string {
   return (LOGIN_ERRORS as readonly string[]).includes(code)
     ? t(`settings.spotify.error.${code}` as MessageKey)
     : t('settings.spotify.error.other', { code });
+}
+
+/** Падключэнне Twitch (ADR-018): Client ID, код для twitch.tv/activate, стан канала і ўзнагароды. */
+function TwitchSection({ controller }: { controller: DockController }) {
+  const clientId = useStore(controller.settings).twitch.clientId;
+  const info = useStore(controller.twitch);
+  const login = useStore(controller.twitchLogin);
+  const connected = info.status !== 'off';
+  const result = connected || login.phase !== 'idle' ? null : readTwitchLoginResult(safeLocalStorage());
+
+  if (connected) {
+    return (
+      <Section title={t('settings.twitch')} help={t('settings.twitch.help')}>
+        <p class={`small ${info.status === 'ok' ? 'good' : info.status === 'connecting' ? '' : 'bad'}`}>{twitchStatusText(info)}</p>
+        {info.status === 'ok' && <p class={`small ${info.reward?.paused === false ? '' : 'muted'}`}>{rewardText(info)}</p>}
+        <div class="row-actions">
+          <button class="btn" onClick={controller.disconnectTwitch}>
+            {t('settings.twitch.disconnect')}
+          </button>
+        </div>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title={t('settings.twitch')} help={t('settings.twitch.help')}>
+      {login.phase === 'idle' ? (
+        <>
+          <label class="field">
+            <span>{t('settings.twitch.clientId')}</span>
+            <input
+              value={clientId}
+              spellcheck={false}
+              autocomplete="off"
+              onInput={(e) => {
+                const value = e.currentTarget.value.trim();
+                controller.updateSettings((s) => ({ ...s, twitch: { ...s.twitch, clientId: value } }));
+              }}
+            />
+          </label>
+          {clientId && !isTwitchClientId(clientId) && <p class="small bad">{t('settings.twitch.badClientId')}</p>}
+          <div class="row-actions">
+            <button class="btn primary" disabled={!isTwitchClientId(clientId)} onClick={controller.connectTwitch}>
+              {t('settings.twitch.connect')}
+            </button>
+          </div>
+          {result && !result.ok && <p class="small bad">{twitchLoginErrorText(result.error ?? '')}</p>}
+        </>
+      ) : login.phase === 'starting' ? (
+        <p class="small muted">{t('settings.twitch.starting')}</p>
+      ) : (
+        <>
+          <div class="field">
+            <span>{t('settings.twitch.code')}</span>
+            <div class="device-code">{login.code.userCode}</div>
+          </div>
+          <div class="row-actions">
+            <button class="btn primary" onClick={() => controller.openTwitchActivate(login.code)}>
+              {t('settings.twitch.open')}
+            </button>
+            <button class="btn" onClick={controller.cancelTwitchLogin}>
+              {t('settings.twitch.cancel')}
+            </button>
+          </div>
+          <p class="small muted">{t('settings.twitch.waiting')}</p>
+        </>
+      )}
+    </Section>
+  );
+}
+
+function twitchStatusText(info: TwitchInfo): string {
+  if (info.status === 'connecting') return t('settings.twitch.connecting');
+  if (info.status === 'error') return t(`settings.twitch.problem.${info.problem || 'other'}`);
+  return info.login ? t('settings.twitch.connected', { login: info.login }) : t('settings.twitch.connectedNoName');
+}
+
+function rewardText(info: TwitchInfo): string {
+  if (!info.reward) return t('settings.twitch.reward.none');
+  return info.reward.paused ? t('settings.twitch.reward.paused') : t('settings.twitch.reward.active', { cost: info.reward.cost });
+}
+
+function twitchLoginErrorText(code: string): string {
+  if (code === 'expired') return t('settings.twitch.error.expired');
+  if (code === 'expired-code' || code.includes('device code')) return t('settings.twitch.error.expired-code');
+  if (code.includes('client')) return t('settings.twitch.error.invalid-client');
+  if (code.includes('denied') || code.includes('declined')) return t('settings.twitch.error.denied');
+  if (code === 'network') return t('settings.twitch.error.network');
+  return t('settings.twitch.error.other', { code });
 }
 
 /** Поле толькі для чытання з кнопкай «Капіяваць». */

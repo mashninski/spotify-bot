@@ -21,6 +21,8 @@ export interface QueueItem {
   requestedBy?: string;
   /** Заказ ужо адпраўлены ў чаргу Spotify (ADR-017): час адпраўкі. */
   sentAt?: number;
+  /** Выкуп узнагароды Twitch, за які заказана песня (ADR-018): па ім бот ставіць «выканана» або вяртае баллы. */
+  redemptionId?: string;
 }
 
 /** Стан плэера і чаргі, якім кіруе док (ADR-007). */

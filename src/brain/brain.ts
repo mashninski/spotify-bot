@@ -1,4 +1,5 @@
-// «Мозг» прыкладання (ADR-015): стан плэера і чаргі, заказы, Spotify (ADR-016), падключэнне да OBS, адпраўка стану ў оверлей.
+// «Мозг» прыкладання (ADR-015): стан плэера і чаргі, заказы, Spotify (ADR-016), Twitch (ADR-018), падключэнне да OBS,
+// адпраўка стану ў оверлей.
 // Працуе толькі ў старонцы-лідары (док або оверлей). Стан піша ў агульныя сховішчы старонкі,
 // а старонка (node.ts) рассылае яго астатнім.
 
@@ -22,6 +23,9 @@ import { applyPlayback, canSave, optimisticSkip } from '../providers/spotify/map
 import { createSpotifyWindowReader } from '../obs/spotify-window';
 import { createRequestCounter, createSpotifySync, initialSpotifyInfo, type SpotifyInfo } from '../providers/spotify/sync';
 import { createMockRequestSource, type SongRequest } from '../sources/twitch';
+import { hasTokens as hasTwitchTokens, type FetchLike as TwitchFetch } from '../sources/twitch/auth';
+import type { SocketFactory } from '../sources/twitch/eventsub';
+import { createTwitchLink, initialTwitchInfo, type RequestOutcome, type TwitchInfo } from '../sources/twitch/twitch';
 import type { ChannelInfo, Command, Notice, ObsInfo } from './bus';
 import { loadPlayer, savePlayer } from './persist';
 
@@ -51,6 +55,7 @@ export interface BrainStores {
   meters: Store<Record<string, number>>;
   notice: Store<Notice | null>;
   spotify: Store<SpotifyInfo>;
+  twitch: Store<TwitchInfo>;
 }
 
 export interface BrainOptions {
@@ -69,6 +74,9 @@ export interface BrainOptions {
   fetch?: FetchLike;
   /** Выклікаецца на кожную падзею ад OBS (дыягностыка схаванага дока). */
   onObsEvent?: () => void;
+  /** Падмена `fetch` і WebSocket для Twitch (тэсты). */
+  twitchFetch?: TwitchFetch;
+  createSocket?: SocketFactory;
 }
 
 export function createBrain(options: BrainOptions) {
@@ -138,6 +146,34 @@ export function createBrain(options: BrainOptions) {
     },
   });
 
+  // --- Twitch (ADR-018) ---
+
+  /** Стрымер націснуў «Адключыць»: пакуль узнагарода ставіцца на паўзу, не падключацца нанова. */
+  let twitchDisconnecting = false;
+  const twitch = createTwitchLink({
+    storage,
+    fetch: options.twitchFetch,
+    createSocket: options.createSocket,
+    price: () => settings.get().rules.price,
+    readiness: () => {
+      if (!spotifyMode) return hasTokens(storage) ? 'wait' : 'off';
+      const status = stores.spotify.get().status;
+      return status === 'ok' ? 'ready' : status === 'connecting' ? 'wait' : 'off';
+    },
+    onRedemption: (r) => processRequest({ user: r.user, query: r.query, redemptionId: r.id }),
+    player: () => player.get(),
+    onInfo: (patch) => stores.twitch.set((s) => ({ ...s, ...patch })),
+    onLoggedOut: () => stores.twitch.set(initialTwitchInfo('off')),
+  });
+
+  /** Токены Twitch з'явіліся (уваход у доку) або зніклі — падключаем або спыняем. */
+  function checkTwitch(): void {
+    if (twitchDisconnecting) return;
+    const connected = hasTwitchTokens(storage);
+    if (connected && !twitch.running) twitch.start();
+    else if (!connected && twitch.running) twitch.stop();
+  }
+
   function enterSpotify(): void {
     spotifyMode = true;
     // Тэставыя трэкі (без Spotify URI) у Spotify не адправіш — прыбіраем іх.
@@ -167,10 +203,11 @@ export function createBrain(options: BrainOptions) {
   }
 
   // Ключ запісу павінен быць унікальны і пасля змены лідара, таму ў ім ідэнтыфікатар старонкі.
-  const makeItem = (track: Track, requestedBy?: string): QueueItem => ({
+  const makeItem = (track: Track, requestedBy?: string, redemptionId?: string): QueueItem => ({
     key: `${track.id}#${options.id}-${++keyCounter}`,
     track,
     ...(requestedBy ? { requestedBy } : {}),
+    ...(redemptionId ? { redemptionId } : {}),
   });
 
   function send(msg: OverlayMessage): void {
@@ -280,9 +317,11 @@ export function createBrain(options: BrainOptions) {
       player.set((s) => q.tick(s, delta));
       if (options.demo && player.get().context.length < CONTEXT_MIN) void refillContext();
     }
+    if (loaded) twitch.tick(now);
     if (now - lastHeartbeatAt >= HEARTBEAT_MS) {
       lastHeartbeatAt = now;
       checkSpotify();
+      checkTwitch();
       sendState(true);
       send({ type: 'ping', at: now });
       updateChannel();
@@ -318,34 +357,62 @@ export function createBrain(options: BrainOptions) {
       });
   }
 
-  /** Заказ гледача: пошук трэка, праверка правілаў, у канец нашай чаргі. Адмова — паведамленне ў доку (на Этапе 4 — у чат). */
-  async function handleRequest(request: SongRequest): Promise<void> {
+  /**
+   * Заказ гледача (тэставы з дока або за баллы з Twitch): пошук трэка, праверка правілаў, у канец нашай чаргі.
+   * Вынік бачны ў доку; для Twitch з яго робяцца «выканана» / вяртанне баллаў і паведамленне ў чат (ADR-018).
+   * `null` — мозг спыніўся, пакуль ішоў пошук (заказ Twitch апрацуе новы лідар).
+   */
+  async function processRequest(request: SongRequest): Promise<RequestOutcome | null> {
+    const outcome = await findAndAdd(request);
+    if (outcome) showNotice(noticeText(request, outcome), outcome.ok ? 'ok' : 'error');
+    return outcome;
+  }
+
+  async function findAndAdd(request: SongRequest): Promise<RequestOutcome | null> {
     let track: Track | null;
     if (spotifyMode) {
       const found = await spotify.search(request.query);
-      if (!running) return;
-      if (!found.ok && found.reason === 'failed') {
-        showNotice(t('player.searchFailed', { user: request.user, query: request.query }), 'error');
-        return;
-      }
+      if (!running) return null;
+      if (!found.ok && found.reason === 'failed') return { ok: false, reason: 'spotify-failed' };
       track = found.ok ? found.track : null;
     } else {
+      // Без Spotify — толькі выдуманыя трэкі: за баллы такое не дадаём.
+      if (request.redemptionId) return { ok: false, reason: 'spotify-off' };
       track = await provider.searchTrack(request.query);
-      if (!running) return;
+      if (!running) return null;
     }
-    if (!track) {
-      showNotice(t('player.notFound', { user: request.user, query: request.query }), 'error');
-      return;
-    }
-    const check = checkRequest(settings.get().rules, player.get(), track, request.user);
+    if (!track) return { ok: false, reason: 'not-found' };
+    const rules = settings.get().rules;
+    const check = checkRequest(rules, player.get(), track, request.user);
     if (!check.ok) {
-      showNotice(rejectText(check.reason, request.user, track.title), 'error');
-      return;
+      const max = check.reason === 'too-long' ? rules.maxDurationMin : rules.maxPerUser;
+      return { ok: false, reason: check.reason, title: track.title, max };
     }
-    const item = makeItem(track, request.user);
+    const item = makeItem(track, request.user, request.redemptionId);
     player.set((s) => (spotifyMode ? rq.appendRequest(s, item) : q.addRequest(s, item)));
-    const n = player.get().requests.length;
-    showNotice(t('player.added', { user: request.user, title: track.title, n: Math.max(n, 1) }));
+    // Захоўваем адразу: заказ за баллы не павінен згубіцца, калі лідар знікне.
+    persist();
+    return { ok: true, title: track.title, n: Math.max(player.get().requests.length, 1) };
+  }
+
+  function noticeText(request: SongRequest, outcome: RequestOutcome): string {
+    const { user, query } = request;
+    if (outcome.ok) return t('player.added', { user, title: outcome.title, n: outcome.n });
+    switch (outcome.reason) {
+      case 'not-found':
+        return t('player.notFound', { user, query });
+      case 'spotify-failed':
+        return t('player.searchFailed', { user, query });
+      case 'too-long':
+      case 'explicit':
+      case 'user-limit':
+      case 'duplicate':
+        return rejectText(outcome.reason, user, outcome.title ?? '');
+      case 'empty':
+        return t('player.emptyRequest', { user });
+      default:
+        return t('player.spotifyOffRequest', { user, query });
+    }
   }
 
   function rejectText(reason: RejectReason, user: string, title: string): string {
@@ -458,8 +525,13 @@ export function createBrain(options: BrainOptions) {
       case 'play-now':
         if (spotifyMode) return playRequestNow(command.key);
         return player.set((s) => q.playNow(s, command.key));
-      case 'remove':
-        return player.set((s) => (spotifyMode ? rq.removeRequest(s, command.key) : q.removeRequest(s, command.key)));
+      case 'remove': {
+        // Заказ за баллы прыбралі — глядачу вяртаюцца баллы (ADR-018).
+        const item = player.get().requests.find((r) => r.key === command.key);
+        if (item?.redemptionId) twitch.removed(item.redemptionId, item.track.title);
+        player.set((s) => (spotifyMode ? rq.removeRequest(s, command.key) : q.removeRequest(s, command.key)));
+        return persist();
+      }
       case 'save-current': {
         const track = player.get().current?.track;
         if (spotifyMode && track?.uri && canSave(track)) void spotify.save(track.uri);
@@ -468,6 +540,13 @@ export function createBrain(options: BrainOptions) {
       case 'spotify-disconnect':
         clearTokens(storage);
         if (spotifyMode) leaveSpotify();
+        return;
+      case 'twitch-disconnect':
+        twitchDisconnecting = true;
+        void twitch.disconnect().finally(() => {
+          twitchDisconnecting = false;
+          stores.twitch.set(initialTwitchInfo('off'));
+        });
         return;
       case 'test-request': {
         const user = MOCK_VIEWERS[Math.floor(Math.random() * MOCK_VIEWERS.length)];
@@ -501,8 +580,9 @@ export function createBrain(options: BrainOptions) {
       loaded = true;
       stores.spotify.set((s) => ({ ...s, requestsToday: counter.get() }));
       checkSpotify();
+      checkTwitch();
       persist();
-      requestSource.start((request) => void handleRequest(request));
+      requestSource.start((request) => void processRequest(request));
       stopFns.push(player.subscribe(() => sendState()));
       const ticker = startTicker(TICK_MS, onTick);
       stopFns.push(() => ticker.stop());
@@ -530,6 +610,8 @@ export function createBrain(options: BrainOptions) {
       if (!running) return;
       running = false;
       spotify.stop();
+      // Старонка зачыняецца — узнагароду на паўзу; новы лідар (калі ён ёсць) зніме паўзу праз некалькі секунд.
+      twitch.stop(true);
       for (const f of stopFns.splice(0)) f();
       requestSource.stop();
       persist();

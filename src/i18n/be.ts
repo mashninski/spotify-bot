@@ -38,7 +38,7 @@ export const be = {
   'player.next': 'Наступная',
   'player.requests': 'Заказы гледачоў',
   'player.requests.help':
-    'Песні, якія гледачы заказалі за баллы канала. Яны граюць па чарзе і раней за ваш плэйліст. У сам Spotify наступны заказ трапляе за некалькі секунд да канца бягучай песні, таму ў чарзе Spotify вы ўбачыце яго толькі тады. Кнопка ▶ адразу ўключае песню, а астатнія заказы застаюцца ў тым жа парадку. Кнопка ✕ прыбірае песню з чаргі. Калі песню не знайшлі або яна парушае правілы з налад (задоўгая, explicit, ужо ў чарзе, у гледача ўжо шмат заказаў), яна ў чаргу не трапляе, а прычына з’яўляецца ў доку. Кнопка «+ Тэставы заказ» дадае заказ ад выдуманага гледача: з падключаным Spotify — сапраўдную песню са Spotify, без яго — выдуманую',
+    'Песні, якія гледачы заказалі за баллы канала. Яны граюць па чарзе і раней за ваш плэйліст. У сам Spotify наступны заказ трапляе за некалькі секунд да канца бягучай песні, таму ў чарзе Spotify вы ўбачыце яго толькі тады. Кнопка ▶ адразу ўключае песню, а астатнія заказы застаюцца ў тым жа парадку. Кнопка ✕ прыбірае песню з чаргі, а глядач атрымлівае свае баллы назад. Калі песню не знайшлі або яна парушае правілы з налад (задоўгая, explicit, ужо ў чарзе, у гледача ўжо шмат заказаў), яна ў чаргу не трапляе: прычына з’яўляецца ў доку, а глядачу бот вяртае баллы і піша ў чат. Кнопка «+ Тэставы заказ» дадае заказ ад выдуманага гледача: з падключаным Spotify — сапраўдную песню са Spotify, без яго — выдуманую',
   'player.requests.empty': 'Заказаў пакуль няма',
   'player.context': 'Далей у Spotify',
   'player.context.help':
@@ -54,6 +54,8 @@ export const be = {
   'player.rejected.explicit': '{user}: «{title}» — explicit забаронены',
   'player.rejected.user-limit': '{user}: ужо {max} песні ў чарзе',
   'player.rejected.duplicate': '{user}: «{title}» ужо ў чарзе',
+  'player.spotifyOffRequest': '{user}: Spotify не падключаны, «{query}» не дададзена',
+  'player.emptyRequest': '{user}: пусты заказ',
 
   'settings.spotify': 'Spotify',
   'settings.spotify.help':
@@ -116,8 +118,51 @@ export const be = {
   'settings.rules.allowExplicit': 'Дазволіць explicit',
   'settings.twitch': 'Twitch',
   'settings.twitch.help':
-    'Twitch патрэбны, каб прымаць заказы песень за баллы канала і адказваць гледачам у чаце ад вашага імя. Падключэнне Twitch з’явіцца ў наступнай версіі прыкладання',
+    'Twitch патрэбны, каб гледачы заказвалі песні за баллы канала, а бот адказваў ім у чаце ад вашага імя. Спачатку ўстаўце ў поле Client ID — яго паказвае старонка вашага прыкладання на dev.twitch.tv/console. Потым націсніце «Падключыць Twitch»: док пакажа код і кнопку, якая адкрые старонку twitch.tv/activate. Там увайдзіце пад акаўнтам свайго канала, праверце, што код такі ж, і дазвольце доступ — док падключыцца сам. Пасля гэтага бот створыць у вашым канале ўзнагароду «Заказаць песню» з цаной з «Правілаў заказаў». Глядач піша ў ёй спасылку на песню ў Spotify або назву, і песня трапляе ў чаргу з яго нікам. Калі песню не знайшлі або яна парушае правілы, бот вяртае баллы і піша прычыну ў чат. Калі вы прыбіраеце заказ з чаргі, баллы таксама вяртаюцца. Пакуль Spotify не падключаны або OBS закрыты, узнагарода стаіць на паўзе, і гледачы не могуць яе купіць. Уваход дзейнічае, пакуль вы адкрываеце OBS з ботам хоць раз на 30 дзён',
+  'settings.twitch.clientId': 'Client ID',
+  'settings.twitch.badClientId': 'Client ID — гэта 30 сімвалаў: лічбы і малыя лацінскія літары',
   'settings.twitch.connect': 'Падключыць Twitch',
+  'settings.twitch.code': 'Код для Twitch',
+  'settings.twitch.open': 'Адкрыць twitch.tv/activate',
+  'settings.twitch.waiting': 'Пацвердзіце код на старонцы Twitch, док чакае…',
+  'settings.twitch.starting': 'Пытаю код у Twitch…',
+  'settings.twitch.cancel': 'Скасаваць',
+  'settings.twitch.disconnect': 'Адключыць',
+  'settings.twitch.connecting': 'Падключэнне да Twitch…',
+  'settings.twitch.connected': 'Падключаны канал {login}',
+  'settings.twitch.connectedNoName': 'Twitch падключаны',
+  'settings.twitch.reward.active': 'Узнагарода «Заказаць песню» за {cost} баллаў працуе',
+  'settings.twitch.reward.paused': 'Узнагарода «Заказаць песню» на паўзе, пакуль не падключаны Spotify',
+  'settings.twitch.reward.none': 'Рыхтую ўзнагароду «Заказаць песню»…',
+  'settings.twitch.problem.network': 'Няма сувязі з Twitch, спрабую зноў…',
+  'settings.twitch.problem.not-affiliate': 'Баллы канала ёсць толькі ў кампаньёнаў і партнёраў Twitch, таму бот не можа стварыць узнагароду',
+  'settings.twitch.problem.duplicate-title':
+    'У канале ўжо ёсць узнагарода «Заказаць песню», створаная не ботам. Перайменуйце або выдаліце яе ў Twitch, і бот створыць сваю',
+  'settings.twitch.problem.scopes': 'Не хапае дазволаў Twitch, адключыце і падключыце Twitch зноў',
+  'settings.twitch.problem.rate': 'Twitch часова абмежаваў запыты, спрабую зноў…',
+  'settings.twitch.problem.other': 'Twitch адказаў памылкай, спрабую зноў…',
+  'settings.twitch.error.expired': 'Уваход у Twitch састарэў, падключыце Twitch зноў',
+  'settings.twitch.error.expired-code': 'Код састарэў, паспрабуйце яшчэ раз',
+  'settings.twitch.error.invalid-client': 'Twitch не прыняў Client ID, праверце яго',
+  'settings.twitch.error.denied': 'Вы не дазволілі доступ у Twitch',
+  'settings.twitch.error.network': 'Няма сувязі з Twitch, паспрабуйце яшчэ раз',
+  'settings.twitch.error.other': 'Не атрымалася падключыць Twitch ({code})',
+
+  'twitch.reward.title': 'Заказаць песню',
+  'twitch.reward.prompt': 'Спасылка на песню ў Spotify або выканаўца і назва. Калі песню не знойдзем, баллы вернуцца',
+
+  'chat.added': '@{user} «{title}» дададзена, №{n} у чарзе',
+  'chat.refund.not-found': '@{user} не знайшоў «{query}» у Spotify, баллы вернуты',
+  'chat.refund.spotify-failed': '@{user} Spotify не адказаў, баллы вернуты',
+  'chat.refund.spotify-off': '@{user} заказы зараз не працуюць, баллы вернуты',
+  'chat.refund.too-long': '@{user} «{title}» даўжэйшая за {max} хв, баллы вернуты',
+  'chat.refund.explicit': '@{user} «{title}» мае пазнаку explicit, такія песні забаронены, баллы вернуты',
+  'chat.refund.user-limit': '@{user} у чарзе ўжо максімум тваіх песень ({max}), баллы вернуты',
+  'chat.refund.duplicate': '@{user} «{title}» ужо ў чарзе, баллы вернуты',
+  'chat.refund.removed': '@{user} стрымер прыбраў «{title}» з чаргі, баллы вернуты',
+  'chat.refund.offline': '@{user} бот не працаваў у момант заказу, баллы вернуты',
+  'chat.refund.empty': '@{user} напішы спасылку на песню або назву, баллы вернуты',
+  'chat.refund.lost': '@{user} заказ не атрымаўся, баллы вернуты',
 
   'diag.brain': 'Дзе працуе бот',
   'diag.brain.help':
@@ -141,6 +186,16 @@ export const be = {
   'diag.spotify.window.no-window': 'Акна Spotify не відаць (ён закрыты або згорнуты), таму змены ў Spotify бот заўважае праз апытанне — да 6 с',
   'diag.spotify.window.no-source': 'Каб змены ў Spotify было відаць амаль адразу, дадайце ў OBS крыніцу «Захват звука приложения» са Spotify',
   'diag.spotify.window.unknown': 'Каб змены ў Spotify было відаць амаль адразу, падключыцеся да OBS',
+
+  'diag.twitch': 'Twitch',
+  'diag.twitch.help':
+    'Каб заказы прыходзілі адразу, бот трымае з Twitch пастаяннае злучэнне. Калі яно на нейкі час знікне (прапаў інтэрнэт, бот перайшоў з дока ў оверлей), пасля аднаўлення бот сам забярэ заказы, якія прыйшлі за гэты час. Тут відаць стан злучэння, калі прыйшоў апошні заказ і колькі адказаў (вяртанне баллаў, паведамленні ў чат) яшчэ чакаюць адпраўкі ў Twitch',
+  'diag.twitch.events.ok': 'Злучэнне для заказаў працуе',
+  'diag.twitch.events.connecting': 'Злучэнне для заказаў устанаўліваецца…',
+  'diag.twitch.events.off': 'Злучэння для заказаў няма',
+  'diag.twitch.lastEvent': 'Апошні заказ: {time}',
+  'diag.twitch.noEvents': 'Заказаў з Twitch пакуль не было',
+  'diag.twitch.pending': 'Чакаюць адпраўкі ў Twitch: {n}',
 
   'diag.env': 'Асяроддзе',
   'diag.env.help': 'Дзе адкрыты док і якім спосабам бот перадае даныя оверлею',

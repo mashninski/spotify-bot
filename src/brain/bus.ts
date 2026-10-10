@@ -5,6 +5,7 @@ import type { PlayerState } from '../core/types';
 import type { ObsChannelMode } from '../obs/channel';
 import type { ObsStatus } from '../obs/client';
 import type { SpotifyInfo } from '../providers/spotify/sync';
+import type { TwitchInfo } from '../sources/twitch/twitch';
 
 export const BUS_NAME = 'spotify-bot:brain';
 export const BUS_VERSION = 1;
@@ -53,6 +54,8 @@ export type Command =
   /** «+»: дадаць бягучую песню ў «Любімыя трэкі» Spotify. */
   | { type: 'save-current' }
   | { type: 'spotify-disconnect' }
+  /** Адключыць Twitch: узнагарода — на паўзу, токены выдаляюцца. */
+  | { type: 'twitch-disconnect' }
   /** Гучнасць Spotify 0…100. */
   | { type: 'volume'; value: number };
 
@@ -63,6 +66,7 @@ export interface BrainSnapshot {
   obs: ObsInfo;
   channel: ChannelInfo;
   spotify: SpotifyInfo;
+  twitch: TwitchInfo;
 }
 
 export type BusMessage =
@@ -95,6 +99,7 @@ const SIMPLE_COMMANDS = new Set([
   'obs-disconnect',
   'save-current',
   'spotify-disconnect',
+  'twitch-disconnect',
 ]);
 
 export function parseCommand(raw: unknown): Command | null {

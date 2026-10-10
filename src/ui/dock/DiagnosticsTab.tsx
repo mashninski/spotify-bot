@@ -16,6 +16,7 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
   const leader = useStore(controller.leader);
   const conflicts = useStore(controller.conflicts);
   const spotify = useStore(controller.spotify);
+  const twitch = useStore(controller.twitch);
   const env = obsBrowserInfo();
   const redirect = readJson<RedirectResult>(safeLocalStorage(), REDIRECT_RESULT_KEY);
 
@@ -38,6 +39,14 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
           <p class={`small ${spotify.windowWatch === 'ok' ? 'good' : 'muted'}`}>{t(`diag.spotify.window.${spotify.windowWatch}`)}</p>
         )}
       </Section>
+
+      {twitch.status !== 'off' && (
+        <Section title={t('diag.twitch')} help={t('diag.twitch.help')}>
+          <p class={`small ${twitch.events === 'ok' ? 'good' : 'muted'}`}>{t(`diag.twitch.events.${twitch.events}`)}</p>
+          <p class="small">{twitch.lastEventAt ? t('diag.twitch.lastEvent', { time: clock(twitch.lastEventAt) }) : t('diag.twitch.noEvents')}</p>
+          <p class="small">{t('diag.twitch.pending', { n: twitch.pending })}</p>
+        </Section>
+      )}
 
       <Section title={t('diag.env')} help={t('diag.env.help')}>
         <p class="small">{env.inObs ? `${t('diag.env.obs')} ${env.version}` : t('diag.env.notObs')}</p>

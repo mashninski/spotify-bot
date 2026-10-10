@@ -62,6 +62,8 @@ function parseItem(raw: unknown): QueueItem | null {
   if (typeof raw.requestedBy === 'string' && raw.requestedBy) item.requestedBy = raw.requestedBy;
   // Адзнака «ужо ў Spotify» (ADR-017): без яе новы лідар адправіў бы заказ другі раз.
   if (typeof raw.sentAt === 'number' && Number.isFinite(raw.sentAt)) item.sentAt = raw.sentAt;
+  // Сувязь з заказам Twitch (ADR-018): без яе новы лідар не ведаў бы, каму вярнуць баллы.
+  if (typeof raw.redemptionId === 'string' && raw.redemptionId) item.redemptionId = raw.redemptionId;
   return item;
 }
 

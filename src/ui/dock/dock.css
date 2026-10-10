@@ -545,3 +545,11 @@ select:focus {
   opacity: 0.4;
   cursor: default;
 }
+
+/* Код для twitch.tv/activate: буйна, каб лёгка параўнаць з кодам на старонцы Twitch. */
+.device-code {
+  font: 700 22px/1.2 Consolas, monospace;
+  letter-spacing: 0.12em;
+  color: var(--text);
+  user-select: all;
+}

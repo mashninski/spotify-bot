@@ -23,6 +23,9 @@ import { electLeader, getLockManager, type LeaderElection, type LockManagerLike 
 import { loadPlayer } from './persist';
 import { hasTokens, type FetchLike } from '../providers/spotify/auth';
 import { initialSpotifyInfo, type SpotifyInfo } from '../providers/spotify/sync';
+import { hasTokens as hasTwitchTokens, type FetchLike as TwitchFetch } from '../sources/twitch/auth';
+import type { SocketFactory } from '../sources/twitch/eventsub';
+import { initialTwitchInfo, type TwitchInfo } from '../sources/twitch/twitch';
 
 /** Затрымка рассылкі стану пасля змены: некалькі змен запар ідуць адным паведамленнем. */
 const SNAPSHOT_DELAY_MS = 50;
@@ -46,6 +49,9 @@ export interface BrainNodeOptions {
   /** Тэставы плэйліст без Spotify (толькі тэсты, гл. BrainOptions.demo). */
   demo?: boolean;
   fetch?: FetchLike;
+  /** Падмена Twitch (тэсты). */
+  twitchFetch?: TwitchFetch;
+  createSocket?: SocketFactory;
 }
 
 export function createBrainNode(options: BrainNodeOptions) {
@@ -64,6 +70,8 @@ export function createBrainNode(options: BrainNodeOptions) {
   const notice = createStore<Notice | null>(null);
   /** Стан падключэння да Spotify (ADR-016). Да першага паведамлення ад лідара — па наяўнасці токенаў. */
   const spotify = createStore<SpotifyInfo>(initialSpotifyInfo(hasTokens(storage) ? 'connecting' : 'off'));
+  /** Стан падключэння да Twitch (ADR-018). */
+  const twitch = createStore<TwitchInfo>(initialTwitchInfo(hasTwitchTokens(storage) ? 'connecting' : 'off'));
   /** Хто зараз лідар (`null` — невядома або нікога няма). */
   const leader = createStore<LeaderInfo | null>(null);
   /** Колькі разоў заўважаны іншы лідар, калі лідар — гэтая старонка (не павінна быць ніколі). */
@@ -77,7 +85,7 @@ export function createBrainNode(options: BrainNodeOptions) {
   const leaderStopFns: (() => void)[] = [];
 
   function snapshot(info: LeaderInfo): BrainSnapshot {
-    return { leader: info, player: { ...player.get(), history: [] }, obs: obs.get(), channel: channel.get(), spotify: spotify.get() };
+    return { leader: info, player: { ...player.get(), history: [] }, obs: obs.get(), channel: channel.get(), spotify: spotify.get(), twitch: twitch.get() };
   }
 
   function postSnapshot(): void {
@@ -107,11 +115,13 @@ export function createBrainNode(options: BrainNodeOptions) {
     brain = createBrain({
       id,
       storage,
-      stores: { settings, player, obs, channel, meters, notice, spotify },
+      stores: { settings, player, obs, channel, meters, notice, spotify, twitch },
       updateSettings,
       onObsEvent: options.onObsEvent,
       demo: options.demo,
       fetch: options.fetch,
+      twitchFetch: options.twitchFetch,
+      createSocket: options.createSocket,
     });
     const heartbeat = setInterval(postSnapshot, SNAPSHOT_HEARTBEAT_MS);
     leaderStopFns.push(
@@ -119,6 +129,7 @@ export function createBrainNode(options: BrainNodeOptions) {
       obs.subscribe(scheduleSnapshot),
       channel.subscribe(scheduleSnapshot),
       spotify.subscribe(scheduleSnapshot),
+      twitch.subscribe(scheduleSnapshot),
       meters.subscribe((m) => bus.post({ kind: 'meters', meters: m })),
       notice.subscribe((n) => n && bus.post({ kind: 'notice', notice: n })),
       () => clearInterval(heartbeat),
@@ -134,6 +145,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     obs.set(s.obs);
     channel.set(s.channel);
     if (s.spotify) spotify.set(s.spotify);
+    if (s.twitch) twitch.set(s.twitch);
   }
 
   function command(c: Command): void {
@@ -152,6 +164,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     meters,
     notice,
     spotify,
+    twitch,
     leader,
     conflicts,
 
@@ -222,6 +235,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     disconnectObs: () => command({ type: 'obs-disconnect' }),
     saveCurrent: () => command({ type: 'save-current' }),
     disconnectSpotify: () => command({ type: 'spotify-disconnect' }),
+    disconnectTwitch: () => command({ type: 'twitch-disconnect' }),
     setVolume: (value: number) => command({ type: 'volume', value }),
   };
 }
