@@ -71,7 +71,7 @@ export function SettingsTab({ controller }: { controller: DockController }) {
       </Section>
 
       <Section title={t('settings.rules')} help={t('settings.rules.help')}>
-        <NumberField label={t('settings.rules.price')} value={settings.rules.price} onChange={(price) => setRules({ price })} />
+        <NumberField label={t('settings.rules.price')} value={settings.rules.price} step={50} onChange={(price) => setRules({ price })} />
         <NumberField
           label={t('settings.rules.maxDuration')}
           value={settings.rules.maxDurationMin}
@@ -141,19 +141,35 @@ function AudioSection({ controller }: { controller: DockController }) {
   );
 }
 
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+/**
+ * Лікавае поле. Пакуль стрымер піша, тэкст трымаецца ў самім полі (`draft`): док часта перамалёўваецца
+ * (узровень гуку ~20 разоў/с), і без гэтага поле вярталася б да старога значэння. Захоўваецца па Enter або пры выхадзе з поля.
+ */
+function NumberField({ label, value, step = 1, onChange }: { label: string; value: number; step?: number; onChange: (v: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const n = Number(draft);
+    if (Number.isInteger(n) && n > 0 && n !== value) onChange(n);
+    setDraft(null);
+  };
   return (
     <label class="field">
       <span>{label}</span>
       <input
         type="number"
-        min={1}
-        step={1}
-        value={value}
+        // Аснова кроку — мінімум: з крокам 50 стрэлкі даюць 50, 100, 150…
+        min={step > 1 ? step : 1}
+        step={step}
+        value={draft ?? String(value)}
+        onInput={(e) => setDraft(e.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && commit()}
+        // Стрэлкі і кола мышы — адразу захаваць новае значэнне.
         onChange={(e) => {
+          if (document.activeElement !== e.currentTarget) return;
           const n = Number(e.currentTarget.value);
           if (Number.isInteger(n) && n > 0) onChange(n);
-          else e.currentTarget.value = String(value);
         }}
       />
     </label>
