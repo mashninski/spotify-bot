@@ -38,7 +38,7 @@ export const be = {
   'settings.obs': 'Падключэнне да OBS (obs-websocket)',
   'settings.obs.url': 'Адрас',
   'settings.obs.password': 'Пароль',
-  'settings.obs.passwordHint': 'OBS → Інструменты → Налады сервера WebSocket → «Паказаць даныя падключэння».',
+  'settings.obs.passwordHint': 'OBS → Сервис (Tools) → Настройки сервера WebSocket → «Показать сведения о подключении» (Show Connect Info).',
   'settings.obs.connect': 'Падключыцца',
   'settings.obs.disconnect': 'Адключыцца',
   'settings.obs.channel': 'Канал да оверлея',
