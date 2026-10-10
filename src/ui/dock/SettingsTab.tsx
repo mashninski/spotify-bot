@@ -1,4 +1,4 @@
-// Укладка «Налады»: OBS, крыніца гуку, правілы заказаў, падключэнні, адрас оверлея.
+// Укладка «Налады»: OBS, крыніца гуку, адрас оверлея, правілы заказаў, падключэнні.
 
 import { useState } from 'preact/hooks';
 import type { RequestRules } from '../../core/rules';
@@ -6,6 +6,7 @@ import { SIMULATED_AUDIO } from '../../core/settings';
 import { t } from '../../i18n';
 import { useStore } from '../shared/hooks';
 import type { DockController } from './controller';
+import { Section } from './Section';
 
 export function SettingsTab({ controller }: { controller: DockController }) {
   const settings = useStore(controller.settings);
@@ -37,8 +38,7 @@ export function SettingsTab({ controller }: { controller: DockController }) {
 
   return (
     <div class="settings">
-      <section>
-        <h2>{t('settings.obs')}</h2>
+      <Section title={t('settings.obs')} help={t('settings.obs.help')}>
         <label class="field">
           <span>{t('settings.obs.url')}</span>
           <input value={settings.obs.url} onChange={(e) => setObs({ url: e.currentTarget.value.trim() })} spellcheck={false} />
@@ -52,13 +52,15 @@ export function SettingsTab({ controller }: { controller: DockController }) {
             onChange={(e) => setObs({ password: e.currentTarget.value })}
           />
         </label>
-        <p class="muted small">{t('settings.obs.passwordHint')}</p>
         <div class="row-actions">
           {connected ? (
-            <button class="btn" onClick={() => {
-              controller.disconnectObs();
-              setObs({ autoConnect: false });
-            }}>
+            <button
+              class="btn"
+              onClick={() => {
+                controller.disconnectObs();
+                setObs({ autoConnect: false });
+              }}
+            >
               {t('settings.obs.disconnect')}
             </button>
           ) : (
@@ -66,33 +68,22 @@ export function SettingsTab({ controller }: { controller: DockController }) {
               {t('settings.obs.connect')}
             </button>
           )}
-          <span class={`status ${obs.status}`}>
-            {t(`obs.status.${obs.status}`)}
-            {obs.status === 'connected' && obs.version ? ` · obs-websocket ${obs.version}` : ''}
-          </span>
+          <span class={`status ${obs.status}`}>{t(`obs.status.${obs.status}`)}</span>
         </div>
-        {obs.status === 'connected' && (
-          <p class="small">
-            {t('settings.obs.channel')}: <b>{t(`settings.obs.channel.${mode}`)}</b>
-          </p>
-        )}
-      </section>
+      </Section>
 
       <AudioSection controller={controller} />
 
-      <section>
-        <h2>{t('settings.overlay')}</h2>
+      <Section title={t('settings.overlay')} help={t('settings.overlay.help')}>
         <div class="copy-row">
           <input readOnly value={overlayUrl.toString()} onFocus={(e) => e.currentTarget.select()} />
           <button class="btn" onClick={() => copy(overlayUrl.toString())}>
             {copied ? t('settings.overlay.copied') : t('settings.overlay.copy')}
           </button>
         </div>
-        <p class="muted small">{t('settings.overlay.hint')}</p>
-      </section>
+      </Section>
 
-      <section>
-        <h2>{t('settings.rules')}</h2>
+      <Section title={t('settings.rules')} help={t('settings.rules.help')}>
         <NumberField label={t('settings.rules.price')} value={settings.rules.price} onChange={(price) => setRules({ price })} />
         <NumberField
           label={t('settings.rules.maxDuration')}
@@ -112,10 +103,9 @@ export function SettingsTab({ controller }: { controller: DockController }) {
           />
           <span>{t('settings.rules.allowExplicit')}</span>
         </label>
-      </section>
+      </Section>
 
-      <section>
-        <h2>{t('settings.accounts')}</h2>
+      <Section title={t('settings.accounts')} help={t('settings.accounts.help')}>
         <div class="row-actions">
           <button class="btn" disabled>
             {t('settings.accounts.spotify')}
@@ -124,10 +114,7 @@ export function SettingsTab({ controller }: { controller: DockController }) {
             {t('settings.accounts.twitch')}
           </button>
         </div>
-        <p class="muted small">{t('settings.accounts.later')}</p>
-      </section>
-
-      <p class="muted small">{t('settings.saved')}</p>
+      </Section>
     </div>
   );
 }
@@ -142,8 +129,7 @@ function AudioSection({ controller }: { controller: DockController }) {
   if (selected && selected !== SIMULATED_AUDIO && !names.includes(selected)) names.unshift(selected);
 
   return (
-    <section>
-      <h2>{t('settings.audio')}</h2>
+    <Section title={t('settings.audio')} help={t('settings.audio.help')}>
       <label class="field">
         <span>{t('settings.audio.source')}</span>
         <select
@@ -171,12 +157,11 @@ function AudioSection({ controller }: { controller: DockController }) {
           ))}
         </ul>
       ) : (
-        <p class="small">
+        <p class="muted small">
           {obsStatus === 'connected' ? t('settings.audio.waiting') : t('settings.audio.connectFirst')}
         </p>
       )}
-      <p class="muted small">{t('settings.audio.hint')}</p>
-    </section>
+    </Section>
   );
 }
 

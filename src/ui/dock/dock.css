@@ -4,7 +4,6 @@
   --green: #1ed760;
   --green-dark: #1db954;
   --bg: #121212;
-  --panel: #1c1c1c;
   --panel-2: #262626;
   --line: #333;
   --text: #fff;
@@ -33,7 +32,7 @@ select {
 }
 
 h2 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -41,11 +40,83 @@ h2 {
   color: var(--muted);
 }
 
+/* Блокі без фону: зоны аддзяляюцца толькі адступамі (ADR-014). */
 section {
-  margin-bottom: 14px;
-  padding: 10px;
-  background: var(--panel);
+  margin: 0 0 28px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Падказка: паўпразрысты «?», тэкст усплывае на плашцы пры навядзенні. */
+.info-tip {
+  position: relative;
+  display: inline-flex;
+}
+
+.info-tip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.35;
+  cursor: help;
+  transition: opacity 0.12s;
+}
+
+.info-tip:hover .info-tip-icon,
+.info-tip-icon:focus-visible {
+  opacity: 0.9;
+}
+
+.info-tip-text {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -4px;
+  z-index: 10;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 10px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
   border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition: opacity 0.12s, transform 0.12s, visibility 0.12s;
+  pointer-events: none;
+}
+
+.info-tip:hover .info-tip-text,
+.info-tip:focus-within .info-tip-text {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
 }
 
 p {
@@ -123,15 +194,7 @@ p {
 }
 
 .content {
-  padding: 8px;
-}
-
-.hint {
-  margin: 0 0 8px;
-  padding: 4px 8px;
-  border-left: 2px solid var(--green);
-  color: var(--muted);
-  font-size: 11px;
+  padding: 16px 12px 24px;
 }
 
 /* Што грае */
@@ -225,16 +288,6 @@ p {
 }
 
 /* Чарга */
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.section-head h2 {
-  margin: 0;
-}
-
 .queue {
   margin: 0;
   padding: 0;

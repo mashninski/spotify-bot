@@ -15,6 +15,10 @@ describe('пераклады', () => {
     for (const [key, value] of Object.entries(be)) expect(value.trim(), key).not.toBe('');
   });
 
+  it('апошні сказ тэксту без кропкі (ADR-014)', () => {
+    for (const [key, value] of Object.entries(be)) expect(value.endsWith('.'), key).toBe(false);
+  });
+
   it('фарматы часу', () => {
     expect(formatClock(185_000)).toBe('3:05');
     expect(formatDuration(42_000)).toBe('42 с');

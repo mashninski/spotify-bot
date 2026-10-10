@@ -5,6 +5,7 @@ import { formatDuration, t } from '../../i18n';
 import { obsBrowserInfo, readJson, REDIRECT_RESULT_KEY, type RedirectResult } from '../shared/diag';
 import { useNow, useStore } from '../shared/hooks';
 import type { DockController } from './controller';
+import { Section } from './Section';
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString('be-BY');
 
@@ -12,24 +13,23 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
   useNow(1000);
   const monitor = useStore(controller.monitor.state);
   const mode = useStore(controller.channelMode);
+  const obs = useStore(controller.obsStatus);
   const env = obsBrowserInfo();
   const redirect = readJson<RedirectResult>(safeLocalStorage(), REDIRECT_RESULT_KEY);
   const stats = controller.sender.stats;
 
   return (
     <div class="diagnostics">
-      <section>
-        <h2>{t('diag.env')}</h2>
+      <Section title={t('diag.env')} help={t('diag.env.help')}>
         <p class="small">{env.inObs ? `${t('diag.env.obs')} ${env.version}` : t('diag.env.notObs')}</p>
         <p class="small">
           {t('diag.channel')}: <b>{t(`settings.obs.channel.${mode}`)}</b> · {t('diag.channel.stats', { sent: stats.sent, errors: stats.errors })}
         </p>
+        {obs.version && <p class="small">{t('diag.obsVersion', { version: obs.version })}</p>}
         {stats.lastError && <p class="muted small mono">{stats.lastError}</p>}
-      </section>
+      </Section>
 
-      <section>
-        <h2>{t('diag.hidden')}</h2>
-        <p class="muted small">{t('diag.hidden.hint')}</p>
+      <Section title={t('diag.hidden')} help={t('diag.hidden.help')}>
         <p class="small">
           {t('diag.hidden.visibility')}: <b>{monitor.visible ? t('diag.hidden.visible') : t('diag.hidden.hiddenNow')}</b>
         </p>
@@ -60,11 +60,9 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
-      <section>
-        <h2>{t('diag.redirect')}</h2>
-        <p class="muted small">{t('diag.redirect.hint')}</p>
+      <Section title={t('diag.redirect')} help={t('diag.redirect.help')}>
         <button class="btn primary" onClick={controller.runRedirectTest}>
           {t('diag.redirect.run')}
         </button>
@@ -75,20 +73,13 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
               ? t('diag.redirect.ok', { host: redirect.via, at: clock(redirect.at) })
               : t('diag.redirect.lost', { at: clock(redirect.at) })}
         </p>
-      </section>
+      </Section>
 
-      <section>
-        <h2>{t('diag.popup')}</h2>
-        <p class="muted small">{t('diag.popup.hint')}</p>
+      <Section title={t('diag.popup')} help={t('diag.popup.help')}>
         <button class="btn" onClick={controller.runPopupTest}>
           {t('diag.popup.run')}
         </button>
-      </section>
-
-      <section>
-        <h2>{t('diag.storage')}</h2>
-        <p class="muted small">{t('diag.storage.hint')}</p>
-      </section>
+      </Section>
     </div>
   );
 }

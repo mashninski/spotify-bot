@@ -6,6 +6,7 @@ import { formatClock, t } from '../../i18n';
 import { useStore } from '../shared/hooks';
 import { CloseIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon, UserIcon } from '../shared/icons';
 import type { DockController } from './controller';
+import { Section } from './Section';
 
 export function PlayerTab({ controller }: { controller: DockController }) {
   const state = useStore(controller.player);
@@ -22,9 +23,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
 
   return (
     <div class="player">
-      <p class="hint">{t('player.testMode')}</p>
-
-      <section class="now">
+      <Section title={t('player.now')} help={t('player.now.help')}>
         {current ? (
           <>
             <div class="now-title">{current.track.title}</div>
@@ -64,17 +63,19 @@ export function PlayerTab({ controller }: { controller: DockController }) {
             <NextIcon />
           </button>
         </div>
-      </section>
+      </Section>
 
       {notice && <div class={`notice ${notice.kind}`}>{notice.text}</div>}
 
-      <section>
-        <div class="section-head">
-          <h2>{t('player.requests')}</h2>
+      <Section
+        title={t('player.requests')}
+        help={t('player.requests.help')}
+        actions={
           <button class="text-btn" onClick={controller.addTestRequest}>
             {t('player.addTestRequest')}
           </button>
-        </div>
+        }
+      >
         {state.requests.length === 0 ? (
           <p class="muted small">{t('player.requests.empty')}</p>
         ) : (
@@ -84,10 +85,9 @@ export function PlayerTab({ controller }: { controller: DockController }) {
             ))}
           </ol>
         )}
-      </section>
+      </Section>
 
-      <section>
-        <h2>{t('player.context')}</h2>
+      <Section title={t('player.context')} help={t('player.context.help')}>
         <ol class="queue context">
           {state.context.slice(0, 5).map((item) => (
             <li key={item.key} class="row">
@@ -99,8 +99,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
             </li>
           ))}
         </ol>
-        <p class="muted small">{t('player.context.hint')}</p>
-      </section>
+      </Section>
     </div>
   );
 }
