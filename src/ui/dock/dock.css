@@ -1,0 +1,414 @@
+/* Док: цёмная тэма побач з OBS, зялёныя акцэнты Spotify. Шырыня дока можа быць ад ~260 px. */
+
+:root {
+  --green: #1ed760;
+  --green-dark: #1db954;
+  --bg: #121212;
+  --panel: #1c1c1c;
+  --panel-2: #262626;
+  --line: #333;
+  --text: #fff;
+  --muted: #a7a7a7;
+  --danger: #f15e6c;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+section {
+  margin-bottom: 14px;
+  padding: 10px;
+  background: var(--panel);
+  border-radius: 8px;
+}
+
+p {
+  margin: 6px 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 12px;
+}
+.mono {
+  font-family: Consolas, monospace;
+  word-break: break-all;
+}
+.good {
+  color: var(--green);
+}
+.bad {
+  color: var(--danger);
+}
+
+/* Верхняя панэль */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.tab {
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tab.active {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.obs-dot {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #666;
+  cursor: pointer;
+}
+.obs-dot.connected {
+  background: var(--green);
+}
+.obs-dot.connecting,
+.obs-dot.error {
+  background: #f5b041;
+}
+.obs-dot.auth-failed {
+  background: var(--danger);
+}
+
+.content {
+  padding: 8px;
+}
+
+.hint {
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--green);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Што грае */
+.now-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.now-artist {
+  color: var(--muted);
+}
+.by {
+  margin-left: 6px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.progress {
+  height: 4px;
+  margin-top: 10px;
+  background: var(--panel-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--green);
+}
+.times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.icon-btn.primary {
+  width: 40px;
+  height: 40px;
+  background: var(--text);
+  color: #000;
+}
+.icon-btn.primary:hover {
+  background: var(--green);
+}
+.icon-btn.small {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.icon-btn.danger:hover {
+  color: var(--danger);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.notice {
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(30, 215, 96, 0.15);
+}
+.notice.error {
+  background: rgba(241, 94, 108, 0.18);
+}
+
+/* Чарга */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.section-head h2 {
+  margin: 0;
+}
+
+.queue {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 2px;
+  border-top: 1px solid var(--line);
+}
+.row:first-child {
+  border-top: 0;
+}
+.row-index {
+  width: 16px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.row-text {
+  flex: 1;
+  min-width: 0;
+}
+.row-title,
+.row-artist {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.row-artist {
+  color: var(--muted);
+  font-size: 12px;
+}
+.row-time {
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.context .row {
+  opacity: 0.75;
+}
+
+.text-btn {
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Налады */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.field span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+input,
+select {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+input:focus,
+select:focus {
+  outline: 1px solid var(--green);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.check input {
+  width: auto;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn.primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
+  font-weight: 600;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.status {
+  font-size: 12px;
+  color: var(--muted);
+}
+.status.connected {
+  color: var(--green);
+}
+.status.auth-failed {
+  color: var(--danger);
+}
+
+.copy-row {
+  display: flex;
+  gap: 6px;
+}
+
+.meters {
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.meters li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.meters li.selected .meter-name {
+  color: var(--green);
+  font-weight: 600;
+}
+.meter-name {
+  width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.meter {
+  flex: 1;
+  height: 6px;
+  background: var(--panel-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+
+/* Праверка */
+.periods {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.periods li {
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}

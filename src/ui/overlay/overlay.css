@@ -1,0 +1,141 @@
+/* Оверлей: празрысты фон, кампактная палоска ў колерах Spotify. */
+
+:root {
+  --green: #1ed760;
+  --bg: rgba(18, 18, 18, 0.92);
+  --bg-soft: rgba(18, 18, 18, 0.72);
+  --text: #ffffff;
+  --muted: #b3b3b3;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.overlay {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 520px;
+  padding: 8px;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 12px;
+  background: var(--bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.4s ease;
+}
+
+.strip.paused {
+  opacity: 0.75;
+}
+
+.logo {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.meta {
+  flex: 1;
+  min-width: 0;
+  animation: track-in 0.45s ease-out;
+}
+
+.title,
+.artist,
+.upcoming li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.artist {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.waveline {
+  flex-shrink: 0;
+  display: block;
+}
+
+.by {
+  margin-left: 6px;
+  color: var(--green);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.by svg {
+  vertical-align: -1px;
+}
+
+/* Чарга: тонкая зялёная лінія злева паказвае, што песні ідуць адна за адной. */
+.upcoming {
+  list-style: none;
+  margin: 6px 0 0 26px;
+  padding: 6px 10px 6px 12px;
+  background: var(--bg-soft);
+  border-left: 2px solid rgba(30, 215, 96, 0.6);
+  border-radius: 0 8px 8px 0;
+  max-width: calc(100% - 26px);
+  box-sizing: border-box;
+}
+
+.upcoming li {
+  font-size: 12px;
+  line-height: 18px;
+  animation: track-in 0.45s ease-out;
+}
+
+.upcoming li:nth-child(1) {
+  opacity: 0.95;
+}
+.upcoming li:nth-child(2) {
+  opacity: 0.78;
+}
+.upcoming li:nth-child(3) {
+  opacity: 0.6;
+}
+
+.up-artist {
+  color: var(--muted);
+}
+
+@keyframes track-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.debug {
+  margin-top: 10px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffeb3b;
+  font: 11px/1.4 Consolas, monospace;
+  border-radius: 6px;
+}
