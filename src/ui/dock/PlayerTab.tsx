@@ -95,12 +95,10 @@ export function PlayerTab({ controller }: { controller: DockController }) {
         title={t('player.requests')}
         help={t('player.requests.help')}
         actions={
-          // Выдуманыя трэкі нельга адправіць у Spotify, таму тэставы заказ — толькі без Spotify (ADR-016).
-          !spotifyOn && (
-            <button class="text-btn" onClick={controller.addTestRequest}>
-              {t('player.addTestRequest')}
-            </button>
-          )
+          // Са Spotify — сапраўдная песня праз пошук Spotify, без яго — выдуманая (ADR-017).
+          <button class="text-btn" onClick={controller.addTestRequest}>
+            {t('player.addTestRequest')}
+          </button>
         }
       >
         {state.requests.length === 0 ? (

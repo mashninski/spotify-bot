@@ -36,4 +36,4 @@ export function createMockProvider(
   };
 }
 
-export { MOCK_TRACKS, MOCK_REQUEST_TRACKS, MOCK_VIEWERS } from './mock-data';
+export { MOCK_TRACKS, MOCK_REQUEST_TRACKS, MOCK_VIEWERS, SPOTIFY_TEST_QUERIES } from './mock-data';

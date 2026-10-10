@@ -4,6 +4,7 @@
 
 import { createEnvelopeFactory, type OverlayMessage } from '../core/messages';
 import * as q from '../core/queue';
+import * as rq from '../core/requests';
 import { checkRequest, type RejectReason } from '../core/rules';
 import { SIMULATED_AUDIO, type Settings } from '../core/settings';
 import type { Store } from '../core/store';
@@ -14,7 +15,7 @@ import { levelFromMeters, simulatedLevel } from '../obs/audio';
 import { OverlaySender } from '../obs/channel';
 import { ObsClient } from '../obs/client';
 import { EventSubscription, type InputVolumeMetersEvent } from '../obs/protocol';
-import { createMockProvider, MOCK_REQUEST_TRACKS, MOCK_VIEWERS, type MusicProvider } from '../providers/spotify';
+import { createMockProvider, MOCK_REQUEST_TRACKS, MOCK_VIEWERS, SPOTIFY_TEST_QUERIES, type MusicProvider } from '../providers/spotify';
 import { createSpotifyApi } from '../providers/spotify/api';
 import { clearTokens, hasTokens, saveLoginResult, type FetchLike } from '../providers/spotify/auth';
 import { applyPlayback, canSave, optimisticSkip } from '../providers/spotify/map';
@@ -36,6 +37,8 @@ const PERSIST_MS = 1000;
 const WINDOW_CHECK_MS = 1000;
 /** Калі ў OBS няма крыніцы са спісам акон — правяраць радзей. */
 const WINDOW_CHECK_IDLE_MS = 10_000;
+/** Калі Spotify не прыняў заказ у чаргу — паўтарыць праз гэты час (не часцей, каб не марнаваць квоту). */
+const SEND_RETRY_MS = 5000;
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -89,6 +92,10 @@ export function createBrain(options: BrainOptions) {
   let lastHeartbeatAt = 0;
   let lastPersistAt = 0;
   let refilling = false;
+  /** Заказ, які зараз адпраўляецца ў Spotify (ключ), і калі можна паспрабаваць зноў пасля няўдачы. */
+  let sendingKey: string | null = null;
+  let nextSendAt = 0;
+  let testQueryIndex = 0;
   let running = false;
   /** Песні мяняе Spotify (ёсць токены), а не ўнутраны таймер. */
   let spotifyMode = false;
@@ -110,7 +117,9 @@ export function createBrain(options: BrainOptions) {
   const spotify = createSpotifySync({
     api,
     onPlayback: (playback, queue) => {
-      if (spotifyMode) player.set((s) => applyPlayback(s, playback, queue));
+      if (!spotifyMode) return;
+      player.set((s) => applyPlayback(s, playback, queue));
+      skipRemovedRequest();
     },
     onInfo: (patch) => stores.spotify.set((s) => ({ ...s, ...patch })),
     onNotice: (n, kind) => showNotice(t(`spotify.notice.${n}`), kind),
@@ -200,6 +209,55 @@ export function createBrain(options: BrainOptions) {
     }
   }
 
+  /**
+   * Першы заказ — у чаргу Spotify незадоўга да канца бягучай песні (ADR-017). Адзнака «адпраўлены» захоўваецца
+   * ў localStorage да запыту: калі лідар знікне пасярэдзіне, новы лідар заказ не задвоіць (а калі запыт
+   * так і не дайшоў, зверка з чаргой Spotify адправіць яго нанова).
+   */
+  function sendNextRequest(now: number): void {
+    if (sendingKey || now < nextSendAt) return;
+    const item = rq.requestToSend(player.get());
+    if (!item?.track.uri) return;
+    player.set((s) => rq.markSent(s, item.key, now));
+    persist();
+    sendingKey = item.key;
+    void spotify.enqueue(item.track.uri).then((ok) => {
+      sendingKey = null;
+      if (ok || !running) return;
+      nextSendAt = Date.now() + SEND_RETRY_MS;
+      player.set((s) => rq.unmarkSent(s, item.key, now));
+    });
+  }
+
+  /** Выдалены заказ, які ўжо быў у чарзе Spotify, пачаў граць — адразу пераключаем на наступную. */
+  function skipRemovedRequest(): void {
+    const s = player.get();
+    if (!s.skip || s.current?.track.uri !== s.skip.uri) return;
+    player.set((st) => ({ ...st, skip: null }));
+    void spotify.command('next');
+  }
+
+  /** Заказ пачынае граць зараз: у Spotify — праз чаргу і «наступная» (ADR-007, ADR-017). */
+  function playRequestNow(key: string): void {
+    const before = player.get();
+    const item = before.requests.find((r) => r.key === key);
+    if (!item?.track.uri) return;
+    const skips = rq.skipsToReach(before, key);
+    const enqueue = item.sentAt === undefined;
+    player.set((s) => rq.startRequest(s, key));
+    persist();
+    void spotify.playUri(item.track.uri, { enqueue, skips }).then((ok) => {
+      if (ok || !running) return;
+      // Spotify не паслухаўся — вяртаем заказы як былі (тыя, што яшчэ ёсць), песню скажа апытанне.
+      player.set((s) => {
+        const keys = new Set([...s.requests.map((r) => r.key), key]);
+        const extra = s.requests.filter((r) => !before.requests.some((b) => b.key === r.key));
+        return { ...s, requests: [...before.requests.filter((r) => keys.has(r.key)), ...extra] };
+      });
+      spotify.nudge();
+    });
+  }
+
   function onTick(): void {
     const now = Date.now();
     const delta = now - lastTickAt;
@@ -207,6 +265,7 @@ export function createBrain(options: BrainOptions) {
     if (spotifyMode) {
       player.set((s) => q.advanceProgress(s, delta));
       spotify.tick(now);
+      sendNextRequest(now);
       checkSpotifyWindow(now);
     } else {
       player.set((s) => q.tick(s, delta));
@@ -250,22 +309,34 @@ export function createBrain(options: BrainOptions) {
       });
   }
 
-  function handleRequest(request: SongRequest): void {
-    void provider.searchTrack(request.query).then((track) => {
+  /** Заказ гледача: пошук трэка, праверка правілаў, у канец нашай чаргі. Адмова — паведамленне ў доку (на Этапе 4 — у чат). */
+  async function handleRequest(request: SongRequest): Promise<void> {
+    let track: Track | null;
+    if (spotifyMode) {
+      const found = await spotify.search(request.query);
       if (!running) return;
-      if (!track) {
-        showNotice(t('player.notFound', { user: request.user, query: request.query }), 'error');
+      if (!found.ok && found.reason === 'failed') {
+        showNotice(t('player.searchFailed', { user: request.user, query: request.query }), 'error');
         return;
       }
-      const check = checkRequest(settings.get().rules, player.get(), track, request.user);
-      if (!check.ok) {
-        showNotice(rejectText(check.reason, request.user, track.title), 'error');
-        return;
-      }
-      player.set((s) => q.addRequest(s, makeItem(track, request.user)));
-      const n = player.get().requests.length;
-      showNotice(t('player.added', { user: request.user, title: track.title, n: Math.max(n, 1) }));
-    });
+      track = found.ok ? found.track : null;
+    } else {
+      track = await provider.searchTrack(request.query);
+      if (!running) return;
+    }
+    if (!track) {
+      showNotice(t('player.notFound', { user: request.user, query: request.query }), 'error');
+      return;
+    }
+    const check = checkRequest(settings.get().rules, player.get(), track, request.user);
+    if (!check.ok) {
+      showNotice(rejectText(check.reason, request.user, track.title), 'error');
+      return;
+    }
+    const item = makeItem(track, request.user);
+    player.set((s) => (spotifyMode ? rq.appendRequest(s, item) : q.addRequest(s, item)));
+    const n = player.get().requests.length;
+    showNotice(t('player.added', { user: request.user, title: track.title, n: Math.max(n, 1) }));
   }
 
   function rejectText(reason: RejectReason, user: string, title: string): string {
@@ -355,6 +426,9 @@ export function createBrain(options: BrainOptions) {
       case 'next':
       case 'previous': {
         if (!spotifyMode) return player.set(command.type === 'next' ? q.skipNext : q.skipPrevious);
+        // Наступная — першы заказ гледача, калі ён ёсць (як у чарзе дока і оверлея).
+        const first = player.get().requests[0];
+        if (command.type === 'next' && first?.track.uri) return playRequestNow(first.key);
         // Паказваем вынік адразу (наступная — з чаргі, папярэдняя — з гісторыі), Spotify пацвердзіць або выправіць.
         player.set((s) => optimisticSkip(s, command.type));
         void spotify.command(command.type).then((ok) => {
@@ -366,11 +440,10 @@ export function createBrain(options: BrainOptions) {
         if (spotifyMode) spotify.setVolume(command.value);
         return;
       case 'play-now':
-        // Заказы ў Spotify — Этап 3б (ADR-007).
-        if (spotifyMode) return;
+        if (spotifyMode) return playRequestNow(command.key);
         return player.set((s) => q.playNow(s, command.key));
       case 'remove':
-        return player.set((s) => q.removeRequest(s, command.key));
+        return player.set((s) => (spotifyMode ? rq.removeRequest(s, command.key) : q.removeRequest(s, command.key)));
       case 'save-current': {
         const track = player.get().current?.track;
         if (spotifyMode && track?.uri && canSave(track)) void spotify.save(track.uri);
@@ -381,10 +454,13 @@ export function createBrain(options: BrainOptions) {
         if (spotifyMode) leaveSpotify();
         return;
       case 'test-request': {
-        // Выдуманыя трэкі нельга адправіць у Spotify (ADR-016).
-        if (spotifyMode) return;
-        const track = MOCK_REQUEST_TRACKS[Math.floor(Math.random() * MOCK_REQUEST_TRACKS.length)];
         const user = MOCK_VIEWERS[Math.floor(Math.random() * MOCK_VIEWERS.length)];
+        // Са Spotify — сапраўдныя трэкі праз пошук (па чарзе: спасылкі і назвы); без яго — выдуманыя.
+        if (spotifyMode) {
+          const query = SPOTIFY_TEST_QUERIES[testQueryIndex++ % SPOTIFY_TEST_QUERIES.length];
+          return requestSource.simulate({ user, query });
+        }
+        const track = MOCK_REQUEST_TRACKS[Math.floor(Math.random() * MOCK_REQUEST_TRACKS.length)];
         return requestSource.simulate({ user, query: `${track.artist} ${track.title}` });
       }
       case 'obs-connect':
@@ -410,7 +486,7 @@ export function createBrain(options: BrainOptions) {
       stores.spotify.set((s) => ({ ...s, requestsToday: counter.get() }));
       checkSpotify();
       persist();
-      requestSource.start(handleRequest);
+      requestSource.start((request) => void handleRequest(request));
       stopFns.push(player.subscribe(() => sendState()));
       const ticker = startTicker(TICK_MS, onTick);
       stopFns.push(() => ticker.stop());

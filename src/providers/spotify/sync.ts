@@ -5,6 +5,7 @@ import type { Track } from '../../core/types';
 import type { WindowWatchStatus } from '../../obs/spotify-window';
 import { SpotifyApiError, type SpotifyApi } from './api';
 import { canSave, parsePlayback, parseQueue, type SpotifyPlayback } from './map';
+import { findTrack, type SearchResult } from './search';
 
 /** Інтэрвалы апытання, мс (ADR-016). Квота Development Mode не апублікавана — не апытваць часцей без патрэбы. */
 export const POLL = {
@@ -28,6 +29,8 @@ export const POLL = {
   /** Пакуль Spotify не пацвердзіў кнопку — правяраем так часта, але не даўжэй за `confirmFor`. */
   confirm: 400,
   confirmFor: 4000,
+  /** Паўза паміж дзвюма «наступная» пры «прайграць зараз». */
+  skipGap: 300,
   /** Пасля сігналу «нешта змянілася» (загаловак акна Spotify). */
   nudge: 250,
   /** Пасля змены гучнасці не верыць старой гучнасці з апытання так доўга. */
@@ -180,7 +183,14 @@ export function createSpotifySync(options: SpotifySyncOptions) {
     }
   }
 
-  function handleError(e: unknown, fromCommand: boolean): void {
+  /** `fromCommand` — паказаць паведамленне ў доку; `'quiet'` — дзеянне бота без паведамлення (паведаміць той, хто выклікаў). */
+  function handleError(e: unknown, fromCommand: boolean | 'quiet'): void {
+    if (fromCommand === 'quiet') {
+      const err = e instanceof SpotifyApiError ? e : null;
+      // Квоту, ліміт і выхад з акаўнта ўлічваем як заўсёды, але без паведамлення.
+      if (err && (err.kind === 'quota' || err.kind === 'rate' || err.kind === 'auth')) handleError(e, false);
+      return;
+    }
     const err = e instanceof SpotifyApiError ? e : new SpotifyApiError('other');
     switch (err.kind) {
       case 'auth':
@@ -283,10 +293,10 @@ export function createSpotifySync(options: SpotifySyncOptions) {
   }
 
   /** Кнопка плэера (`expect` — чаго чакаць ад Spotify) або іншае дзеянне (`null`: апытваць зноў не трэба). */
-  async function run(action: () => Promise<unknown>, expect: Expectation | null): Promise<boolean> {
+  async function run(action: () => Promise<unknown>, expect: Expectation | null, notify: true | 'quiet' = true): Promise<boolean> {
     if (!active) return false;
     if (now() < limitedUntil) {
-      options.onNotice('limited', 'error');
+      if (notify === true) options.onNotice('limited', 'error');
       return false;
     }
     if (expect) {
@@ -298,7 +308,7 @@ export function createSpotifySync(options: SpotifySyncOptions) {
       return true;
     } catch (e) {
       if (expect) expectation = null;
-      handleError(e, true);
+      handleError(e, notify);
       return false;
     } finally {
       if (expect) pollSoon(POLL.afterCommand);
@@ -375,6 +385,44 @@ export function createSpotifySync(options: SpotifySyncOptions) {
       volumeHoldUntil = now() + POLL.volumeHold;
       options.onInfo({ volume: pendingVolume });
       flushVolume();
+    },
+
+    /**
+     * Заказ — у чаргу Spotify (ADR-017). Без паведамлення: калі не атрымалася, мозг паспрабуе пазней.
+     * Апытваць Spotify пасля гэтага не трэба — заказ зайграе пасля бягучай песні.
+     */
+    enqueue(uri: string): Promise<boolean> {
+      return run(() => api.addToQueue(uri), null, 'quiet');
+    },
+
+    /**
+     * «Прайграць зараз»: дадаць трэк у чаргу Spotify (калі ён яшчэ не там) і націснуць «наступная» `skips` разоў.
+     * Пакуль Spotify не пачаў граць менавіта гэты трэк (да 4 с), док паказвае яго, а не старыя адказы.
+     */
+    playUri(uri: string, { enqueue, skips }: { enqueue: boolean; skips: number }): Promise<boolean> {
+      return run(
+        async () => {
+          if (enqueue) await api.addToQueue(uri);
+          for (let i = 0; i < skips; i++) {
+            // Spotify не абяцае парадак каманд, якія ідуць адна за адной, — невялікая паўза паміж імі.
+            if (i > 0) await new Promise((r) => setTimeout(r, POLL.skipGap));
+            await api.next();
+          }
+        },
+        { until: now() + POLL.confirmFor, accept: (p) => p?.track?.uri === uri },
+      );
+    },
+
+    /** Пошук трэка для заказу. Пры квоце або памылцы Spotify — `failed` (віна не гледача). */
+    async search(query: string): Promise<SearchResult> {
+      if (!active || now() < blockedUntil) return { ok: false, reason: 'failed' };
+      try {
+        const track = await findTrack(api, query);
+        return track ? { ok: true, track } : { ok: false, reason: 'not-found' };
+      } catch (e) {
+        handleError(e, 'quiet');
+        return { ok: false, reason: 'failed' };
+      }
     },
 
     /** «+»: дадаць песню ў «Любімыя трэкі». */

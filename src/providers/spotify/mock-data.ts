@@ -27,3 +27,18 @@ export const MOCK_REQUEST_TRACKS: Track[] = [
 ];
 
 export const MOCK_VIEWERS = ['zubr_gamer', 'kasia_bel', 'ales_mix', 'jana_lis', 'pavel_bulba'];
+
+/**
+ * Запыты для «+ Тэставы заказ», калі Spotify падключаны: сапраўдныя трэкі праз пошук Spotify.
+ * Ідуць па чарзе, каб праверыць усе выпадкі: спасылка, назва па-беларуску і па-англійску, задоўгая песня (правіла 12 хв).
+ */
+export const SPOTIFY_TEST_QUERIES = [
+  'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+  'NaviBand Гісторыя майго жыцця',
+  'Daft Punk Get Lucky',
+  'N.R.M. Тры чарапахі',
+  'spotify:track:4u7EnebtmKWzUH433cf5Qv',
+  "Queen Don't Stop Me Now",
+  'Rush 2112',
+  'Molchat Doma Судно',
+];

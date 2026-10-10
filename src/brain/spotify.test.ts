@@ -146,3 +146,136 @@ describe('хуткі водгук у OBS', () => {
     await vi.waitFor(() => expect(dock.spotify.get().volume).toBe(25), WAIT);
   });
 });
+
+describe('заказы гледачоў у Spotify (Этап 3б, ADR-017)', () => {
+  const SLOW = { timeout: 7000, interval: 25 };
+
+  /** Песня ў Spotify амаль скончылася: заказ трэба адправіць адразу. */
+  function nearEnd(spotify: ReturnType<typeof createFakeSpotify>) {
+    spotify.state.progressMs = 180_000 - 1500;
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  async function connected() {
+    const ctx = setup();
+    const overlay = ctx.make('overlay');
+    await vi.waitFor(() => expect(overlay.isLeader()).toBe(true), WAIT);
+    const dock = ctx.make('dock');
+    await vi.waitFor(() => expect(dock.spotify.get().status).toBe('ok'), WAIT);
+    return { ...ctx, overlay, dock };
+  }
+
+  /** Тэставыя заказы ад розных гледачоў па чарзе (інакш выпадковы глядач можа ўпёрціся ў правіла «не больш за 2»). */
+  async function addRequests(dock: BrainNode, count: number) {
+    let viewer = 0;
+    if (!vi.isMockFunction(Math.random)) vi.spyOn(Math, 'random').mockImplementation(() => (viewer++ % 5) / 5);
+    for (let n = dock.player.get().requests.length + 1; count > 0; n++, count--) {
+      dock.addTestRequest();
+      await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(n), WAIT);
+    }
+  }
+
+  it('тэставы заказ па спасылцы і па назве знаходзіцца ў Spotify і стаіць у чарзе з нікам', async () => {
+    const { dock, spotify } = await connected();
+    await addRequests(dock, 2); // спасылка, потым назва па-беларуску
+    const requests = dock.player.get().requests;
+    expect(requests.map((r) => r.track.title)).toEqual(['Never Gonna Give You Up', 'Гісторыя майго жыцця']);
+    expect(requests.every((r) => r.requestedBy && r.track.uri)).toBe(true);
+    expect(spotify.calls).toContain('GET /tracks/4cOdK2wGLETKBW3PvgPWqT');
+    expect(spotify.calls).toContain('GET /search');
+    // Да канца песні далёка — у Spotify яшчэ нічога не адпраўлена.
+    expect(spotify.count('POST /me/player/queue')).toBe(0);
+    await vi.waitFor(() => expect(dock.notice.get()?.kind).toBe('ok'), WAIT);
+  });
+
+  it('заказ адпраўляецца сам за некалькі секунд да канца і не адпраўляецца другі раз', async () => {
+    const ctx = setup();
+    nearEnd(ctx.spotify);
+    const overlay = ctx.make('overlay');
+    await vi.waitFor(() => expect(overlay.isLeader()).toBe(true), WAIT);
+    const dock = ctx.make('dock');
+    await vi.waitFor(() => expect(dock.spotify.get().status).toBe('ok'), WAIT);
+    const { spotify } = ctx;
+    dock.addTestRequest();
+    await vi.waitFor(() => expect(spotify.state.userQueue.map((t) => t.id)).toEqual(['4cOdK2wGLETKBW3PvgPWqT']), SLOW);
+    await vi.waitFor(() => expect(dock.player.get().requests[0]?.sentAt).toBeTypeOf('number'), WAIT);
+    // У доку і оверлеі заказ адзін раз — з нікам, а не яшчэ і ў «Далей у Spotify».
+    expect(dock.player.get().context.some((c) => c.track.id === '4cOdK2wGLETKBW3PvgPWqT')).toBe(false);
+    spotify.finishSong();
+    await vi.waitFor(() => expect(dock.player.get().current?.track.title).toBe('Never Gonna Give You Up'), SLOW);
+    expect(dock.player.get().current?.requestedBy).toBeTruthy();
+    expect(dock.player.get().requests).toHaveLength(0);
+    expect(spotify.count('POST /me/player/queue')).toBe(1);
+  });
+
+  it('«прайграць зараз» уключае заказ адразу, астатнія застаюцца; «выдаліць» — толькі з нашай чаргі', async () => {
+    const { dock, spotify } = await connected();
+    await addRequests(dock, 3);
+    const [first, second, third] = dock.player.get().requests;
+    dock.removeRequest(third.key);
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(2), WAIT);
+    dock.playNow(second.key);
+    await vi.waitFor(() => expect(spotify.state.current?.id).toBe(second.track.id), WAIT);
+    await vi.waitFor(() => expect(dock.player.get().current).toMatchObject({ key: second.key, requestedBy: second.requestedBy }), WAIT);
+    expect(dock.player.get().requests.map((r) => r.key)).toEqual([first.key]);
+    expect(spotify.count('POST /me/player/queue')).toBe(1);
+    expect(spotify.count('POST /me/player/next')).toBe(1);
+    // Выдалены заказ у Spotify не трапляў зусім.
+    expect([...spotify.state.history, ...spotify.state.userQueue].some((t) => t.id === third.track.id)).toBe(false);
+  });
+
+  it('«Наступная» ўключае першы заказ, а не плэйліст', async () => {
+    const { dock, spotify } = await connected();
+    await addRequests(dock, 1);
+    const first = dock.player.get().requests[0];
+    dock.next();
+    await vi.waitFor(() => expect(spotify.state.current?.id).toBe('4cOdK2wGLETKBW3PvgPWqT'), WAIT);
+    await vi.waitFor(() => expect(dock.player.get().current).toMatchObject({ key: first.key, requestedBy: first.requestedBy }), WAIT);
+    // Апытанні Spotify пасля гэтага не сціраюць нік.
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(dock.player.get().current).toMatchObject({ key: first.key, requestedBy: first.requestedBy });
+    expect(dock.player.get().requests).toHaveLength(0);
+  });
+
+  it('правілы: трэці заказ аднаго гледача не прымаецца, прычына — у паведамленні дока', async () => {
+    const { dock, spotify } = await connected();
+    vi.spyOn(Math, 'random').mockReturnValue(0); // заўсёды той жа глядач
+    await addRequests(dock, 2);
+    dock.addTestRequest();
+    await vi.waitFor(() => expect(dock.notice.get()).toMatchObject({ kind: 'error', text: 'zubr_gamer: ужо 2 песні ў чарзе' }), WAIT);
+    expect(dock.player.get().requests).toHaveLength(2);
+    expect(spotify.count('POST /me/player/queue')).toBe(0);
+  });
+
+  it('Spotify не адказвае на пошук (квота) — заказ не дададзены, паведамленне ў доку', async () => {
+    const { dock, spotify } = await connected();
+    await new Promise((r) => setTimeout(r, 100));
+    spotify.state.nextReply = { status: 429, body: { error: { status: 429, reason: 'QUOTA_EXCEEDED' } }, headers: { 'Retry-After': '60' } };
+    dock.addTestRequest();
+    await vi.waitFor(() => expect(dock.notice.get()?.text).toContain('Spotify не адказаў'), WAIT);
+    expect(dock.player.get().requests).toHaveLength(0);
+    await vi.waitFor(() => expect(dock.spotify.get().status).toBe('limited'), WAIT);
+  });
+
+  it('змена лідара пасля адпраўкі: заказ не губляецца і не адпраўляецца другі раз', async () => {
+    const { make, spotify } = setup();
+    nearEnd(spotify);
+    const dock = make('dock');
+    await vi.waitFor(() => expect(dock.isLeader()).toBe(true), WAIT);
+    await vi.waitFor(() => expect(dock.spotify.get().status).toBe('ok'), WAIT);
+    dock.addTestRequest();
+    await vi.waitFor(() => expect(spotify.count('POST /me/player/queue')).toBe(1), SLOW);
+    await vi.waitFor(() => expect(dock.player.get().requests[0]?.sentAt).toBeTypeOf('number'), WAIT);
+    const overlay = make('overlay');
+    dock.stop(); // док закрылі — бот пераходзіць у оверлей
+    await vi.waitFor(() => expect(overlay.isLeader()).toBe(true), WAIT);
+    await vi.waitFor(() => expect(overlay.player.get().requests).toHaveLength(1), WAIT);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(spotify.count('POST /me/player/queue')).toBe(1);
+    spotify.finishSong();
+    await vi.waitFor(() => expect(overlay.player.get().current?.requestedBy).toBeTruthy(), SLOW);
+    expect(overlay.player.get().requests).toHaveLength(0);
+    expect(spotify.count('POST /me/player/queue')).toBe(1);
+  });
+});
