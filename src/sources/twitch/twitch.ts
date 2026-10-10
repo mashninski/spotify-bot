@@ -13,6 +13,8 @@ export const REWARD_KEY = 'spotify-bot:twitch:reward:v1';
 
 /** Узнагарода, якую стварае прыкладанне. Назва — да 45 сімвалаў, падказка — да 200 (правілы Twitch). */
 export const REWARD_COLOR = '#1DB954';
+/** Ранейшыя назвы ўзнагароды: калі бот страціў яе id, знаходзіць яе і па старой назве (і перайменоўвае). */
+const LEGACY_TITLES = ['Заказаць песню'];
 /** Як часта Twitch патрабуе правяраць токен. */
 const VALIDATE_EVERY_MS = 3600_000;
 /** Пасля старту лідара не чапаем паўзу ўзнагароды крыху: папярэдні лідар мог толькі што паставіць яе на паўзу. */
@@ -53,7 +55,7 @@ export function initialTwitchInfo(status: TwitchStatus = 'off'): TwitchInfo {
 
 /** Што мозг зрабіў з заказам. */
 export type RequestOutcome =
-  | { ok: true; title: string; n: number }
+  | { ok: true; title: string; artist?: string; n: number }
   | { ok: false; reason: rl.RefundReason; title?: string; max?: number };
 
 export interface TwitchRequest {
@@ -112,7 +114,11 @@ const shorten = (s: string) => (s.length > TITLE_MAX ? `${s.slice(0, TITLE_MAX -
 
 /** Тэкст паведамлення ў чат пра вынік заказу (ADR-011, па-беларуску праз i18n). */
 export function chatText(user: string, outcome: RequestOutcome, query = ''): string {
-  if (outcome.ok) return t('chat.added', { user, title: shorten(outcome.title), n: outcome.n });
+  if (outcome.ok) {
+    // «Гурт — Назва стала ў чаргу»: без ніка і нумара (просьба аўтара).
+    const song = outcome.artist ? `${shorten(outcome.artist)} — ${shorten(outcome.title)}` : shorten(outcome.title);
+    return t('chat.added', { user, song, n: outcome.n });
+  }
   return t(`chat.refund.${outcome.reason}` as MessageKey, {
     user,
     title: shorten(outcome.title ?? ''),
@@ -245,8 +251,8 @@ export function createTwitchLink(options: TwitchLinkOptions) {
       }
     }
     if (!found) {
-      const title = t('twitch.reward.title');
-      found = (await api.getRewards(broadcasterId)).find((r) => r.title === title) ?? null;
+      const titles = [t('twitch.reward.title'), ...LEGACY_TITLES];
+      found = (await api.getRewards(broadcasterId)).find((r) => titles.includes(r.title)) ?? null;
     }
     if (!found) {
       try {
@@ -307,7 +313,7 @@ export function createTwitchLink(options: TwitchLinkOptions) {
     } else if (type === 'channel.channel_points_custom_reward.update') {
       const r = parseReward(event);
       if (r && reward && r.id === reward.id) {
-        reward = { ...reward, cost: r.cost, isPaused: r.isPaused };
+        reward = { ...reward, cost: r.cost, title: r.title, isPaused: r.isPaused };
         setInfo({ reward: { cost: r.cost, paused: r.isPaused } });
       }
     } else if (type === 'channel.channel_points_custom_reward.remove') {
@@ -407,6 +413,8 @@ export function createTwitchLink(options: TwitchLinkOptions) {
     const patch: Record<string, unknown> = {};
     const cost = Math.max(1, Math.round(options.price()));
     if (reward.cost !== cost) patch.cost = cost;
+    const title = t('twitch.reward.title');
+    if (reward.title !== title) patch.title = title;
     const ready = options.readiness() === 'ready';
     if (ready !== lastReady) {
       lastReady = ready;
@@ -447,7 +455,12 @@ export function createTwitchLink(options: TwitchLinkOptions) {
     const patch = rewardPatch(t0);
     if (patch && reward) {
       const updated = await api.updateReward(broadcasterId, reward.id, patch);
-      reward = updated ?? { ...reward, ...('cost' in patch ? { cost: patch.cost as number } : {}), ...('is_paused' in patch ? { isPaused: patch.is_paused as boolean } : {}) };
+      reward = updated ?? {
+        ...reward,
+        ...('cost' in patch ? { cost: patch.cost as number } : {}),
+        ...('title' in patch ? { title: patch.title as string } : {}),
+        ...('is_paused' in patch ? { isPaused: patch.is_paused as boolean } : {}),
+      };
       rewardCheckedAt = now();
       setInfo({ reward: { cost: reward.cost, paused: reward.isPaused } });
       return;

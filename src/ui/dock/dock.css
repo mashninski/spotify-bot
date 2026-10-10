@@ -553,3 +553,13 @@ select:focus {
   color: var(--text);
   user-select: all;
 }
+
+/* «+ Тэставая замова» — для праверак, таму непрыкметная. */
+.test-btn {
+  opacity: 0.45;
+  transition: opacity 0.12s;
+}
+.test-btn:hover,
+.test-btn:focus-visible {
+  opacity: 1;
+}

@@ -392,7 +392,7 @@ export function createBrain(options: BrainOptions) {
     player.set((s) => (spotifyMode ? rq.appendRequest(s, item) : q.addRequest(s, item)));
     // Захоўваем адразу: заказ за баллы не павінен згубіцца, калі лідар знікне.
     persist();
-    return { ok: true, title: track.title, n: Math.max(player.get().requests.length, 1) };
+    return { ok: true, title: track.title, artist: track.artist, n: Math.max(player.get().requests.length, 1) };
   }
 
   function noticeText(request: SongRequest, outcome: RequestOutcome): string {

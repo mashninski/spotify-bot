@@ -74,13 +74,13 @@ afterEach(() => {
 });
 
 describe('Twitch: падключэнне і ўзнагарода', () => {
-  it('бот стварае ўзнагароду «Заказаць песню» з цаной з правілаў і падпісваецца на заказы', async () => {
+  it('бот стварае ўзнагароду «Замовіць песню» з коштам з правілаў і падпісваецца на заказы', async () => {
     const { make, twitch } = setup();
     const dock = make('dock');
     await ready(twitch);
     expect(twitch.state.rewards).toHaveLength(1);
     expect(twitch.state.rewards[0]).toMatchObject({
-      title: 'Заказаць песню',
+      title: 'Замовіць песню',
       cost: 1000,
       is_user_input_required: true,
       should_redemptions_skip_request_queue: false,
@@ -100,6 +100,25 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     expect(twitch.state.rewards).toHaveLength(1);
     overlay.updateSettings((s) => ({ ...s, rules: { ...s.rules, price: 500 } }));
     await vi.waitFor(() => expect(twitch.state.rewards[0].cost).toBe(500), WAIT);
+  });
+
+  it('узнагароду са старой назвай «Заказаць песню» бот бярэ сабе і перайменоўвае', async () => {
+    const { make, twitch } = setup();
+    twitch.state.rewards.push({
+      id: 'old-reward',
+      title: 'Заказаць песню',
+      cost: 1000,
+      prompt: '',
+      is_paused: false,
+      is_enabled: true,
+      is_user_input_required: true,
+      should_redemptions_skip_request_queue: false,
+      managed: true,
+    });
+    make('dock');
+    await ready(twitch);
+    expect(twitch.state.rewards.map((r) => r.id)).toEqual(['old-reward']);
+    await vi.waitFor(() => expect(twitch.state.rewards[0].title).toBe('Замовіць песню'), WAIT);
   });
 
   it('канал без баллаў канала — зразумелая памылка', async () => {
@@ -139,7 +158,7 @@ describe('Twitch: заказы за баллы', () => {
     await ready(twitch);
     const r = twitch.redeem('Kasia', RICK);
     await vi.waitFor(() => expect(dock.player.get().requests.map((x) => x.requestedBy)).toEqual(['Kasia']), WAIT);
-    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Kasia «Never Gonna Give You Up» дададзена, №1 у чарзе']), WAIT);
+    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['Rick Astley — Never Gonna Give You Up стала ў чаргу']), WAIT);
     expect(twitch.statusOf(r.id)).toBe('UNFULFILLED');
     dock.playNow(dock.player.get().requests[0].key);
     await vi.waitFor(() => expect(dock.player.get().current?.requestedBy).toBe('Kasia'), WAIT);
@@ -172,7 +191,7 @@ describe('Twitch: заказы за баллы', () => {
       () =>
         expect(twitch.state.chat).toEqual([
           '@Ales «2112» даўжэйшая за 12 хв, баллы вернуты',
-          '@Kasia «Get Lucky» дададзена, №1 у чарзе',
+          'Daft Punk — Get Lucky стала ў чаргу',
           '@Ales «Get Lucky» ужо ў чарзе, баллы вернуты',
         ]),
       WAIT,
@@ -218,7 +237,7 @@ describe('Twitch: заказы за баллы', () => {
     await ready(twitch);
     const r = twitch.redeem('Kasia', RICK);
     await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
-    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Kasia заказы зараз не працуюць, баллы вернуты']), WAIT);
+    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Kasia замовы зараз не працуюць, баллы вернуты']), WAIT);
   });
 });
 

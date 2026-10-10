@@ -36,7 +36,8 @@ export function PlayerTab({ controller }: { controller: DockController }) {
 
   return (
     <div class="player">
-      <Section title={t('player.now')} help={t('player.now.help')}>
+      {/* Бягучая песня — без загалоўка і падказкі: і так зразумела (просьба аўтара). */}
+      <section class="now">
         {current ? (
           <div class="now-track" key={current.key}>
             <div class="now-head">
@@ -87,7 +88,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
           </button>
           {spotifyOn && <VolumeControl controller={controller} />}
         </div>
-      </Section>
+      </section>
 
       {notice && <div class={`notice ${notice.kind}`}>{notice.text}</div>}
 
@@ -96,7 +97,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
         help={t('player.requests.help')}
         actions={
           // Са Spotify — сапраўдная песня праз пошук Spotify, без яго — выдуманая (ADR-017).
-          <button class="text-btn" onClick={controller.addTestRequest}>
+          <button class="text-btn test-btn" onClick={controller.addTestRequest}>
             {t('player.addTestRequest')}
           </button>
         }

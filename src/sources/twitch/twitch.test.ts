@@ -91,7 +91,7 @@ describe('Twitch у лідары', () => {
     expect(handled).toEqual(['новы заказ']);
     expect(twitch.statusOf(old.id)).toBe('CANCELED');
     expect(twitch.statusOf(fresh.id)).toBe('UNFULFILLED');
-    expect(twitch.state.chat).toContain('@Old бот не працаваў у момант заказу, баллы вернуты');
+    expect(twitch.state.chat).toContain('@Old бот не працаваў у момант замовы, баллы вернуты');
   });
 
   it('пакуль Spotify падключаецца, заказ чакае, а не адмяняецца', async () => {
@@ -148,9 +148,10 @@ describe('Twitch у лідары', () => {
     expect(twitch.statusOf(r.id)).toBe('CANCELED');
   });
 
-  it('доўгія назвы ў чаце скарачаюцца', () => {
-    const text = chatText('u', { ok: true, title: 'x'.repeat(300), n: 2 });
-    expect(text.length).toBeLessThan(140);
-    expect(text).toContain('№2');
+  it('паведамленне пра прынятую замову: «Гурт — Назва стала ў чаргу»; доўгія назвы скарачаюцца', () => {
+    expect(chatText('u', { ok: true, title: 'Pneuma', artist: 'TOOL', n: 1 })).toBe('TOOL — Pneuma стала ў чаргу');
+    expect(chatText('u', { ok: true, title: 'Pneuma', n: 1 })).toBe('Pneuma стала ў чаргу');
+    const text = chatText('u', { ok: true, title: 'x'.repeat(300), artist: 'y'.repeat(300), n: 2 });
+    expect(text.length).toBeLessThan(200);
   });
 });
