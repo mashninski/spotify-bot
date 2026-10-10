@@ -256,7 +256,7 @@ describe('заказы гледачоў у Spotify (Этап 3б, ADR-017)', () 
     vi.spyOn(Math, 'random').mockReturnValue(0); // заўсёды той жа глядач
     await addRequests(dock, 2);
     dock.addTestRequest();
-    await vi.waitFor(() => expect(dock.notice.get()).toMatchObject({ kind: 'error', text: 'zubr_gamer: ужо 2 песні ў чарзе' }), WAIT);
+    await vi.waitFor(() => expect(dock.notice.get()).toMatchObject({ kind: 'error', text: 'zubr_gamer: у чарзе ўжо максімум песень ад гледача (2)' }), WAIT);
     expect(dock.player.get().requests).toHaveLength(2);
     expect(spotify.count('POST /me/player/queue')).toBe(0);
   });

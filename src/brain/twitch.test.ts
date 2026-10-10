@@ -1,4 +1,4 @@
-// «Мозг» з Twitch (ADR-018): заказы за баллы канала праз падробкі Twitch і Spotify.
+// «Мозг» з Twitch (ADR-018): заказы за балы канала праз падробкі Twitch і Spotify.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { saveTokens as saveSpotifyTokens } from '../providers/spotify/auth';
@@ -121,7 +121,7 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     await vi.waitFor(() => expect(twitch.state.rewards[0].title).toBe('Замовіць песню'), WAIT);
   });
 
-  it('канал без баллаў канала — зразумелая памылка', async () => {
+  it('канал без балаў канала — зразумелая памылка', async () => {
     const { make, twitch } = setup();
     twitch.state.affiliate = false;
     const dock = make('dock');
@@ -151,14 +151,14 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
   });
 });
 
-describe('Twitch: заказы за баллы', () => {
+describe('Twitch: заказы за балы', () => {
   it('заказ па спасылцы — у чаргу з нікам, «дададзена» ў чаце; калі зайграў — «выканана»', async () => {
     const { make, twitch } = setup();
     const dock = make('dock');
     await ready(twitch);
     const r = twitch.redeem('Kasia', RICK);
     await vi.waitFor(() => expect(dock.player.get().requests.map((x) => x.requestedBy)).toEqual(['Kasia']), WAIT);
-    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['Rick Astley — Never Gonna Give You Up стала ў чаргу']), WAIT);
+    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Kasia Rick Astley — Never Gonna Give You Up стала ў чаргу']), WAIT);
     expect(twitch.statusOf(r.id)).toBe('UNFULFILLED');
     dock.playNow(dock.player.get().requests[0].key);
     await vi.waitFor(() => expect(dock.player.get().current?.requestedBy).toBe('Kasia'), WAIT);
@@ -166,17 +166,17 @@ describe('Twitch: заказы за баллы', () => {
     expect(twitch.state.chat).toHaveLength(1);
   });
 
-  it('не знайшоў — баллы вернуты і паведамленне з прычынай', async () => {
+  it('не знайшоў — балы вернуты і паведамленне з прычынай', async () => {
     const { make, twitch } = setup();
     const dock = make('dock');
     await ready(twitch);
     const r = twitch.redeem('Ales', 'zzzz qqqq');
     await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
-    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Ales не знайшоў «zzzz qqqq» у Spotify, баллы вернуты']), WAIT);
+    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Ales «zzzz qqqq» не знайшлося ў Spotify, балы вернуты']), WAIT);
     expect(dock.player.get().requests).toEqual([]);
   });
 
-  it('парушэнне правілаў (задоўгая песня, паўтор) — баллы вернуты', async () => {
+  it('парушэнне правілаў (задоўгая песня, паўтор) — балы вернуты', async () => {
     const { make, twitch } = setup();
     const dock = make('dock');
     await ready(twitch);
@@ -190,15 +190,15 @@ describe('Twitch: заказы за баллы', () => {
     await vi.waitFor(
       () =>
         expect(twitch.state.chat).toEqual([
-          '@Ales «2112» даўжэйшая за 12 хв, баллы вернуты',
-          'Daft Punk — Get Lucky стала ў чаргу',
-          '@Ales «Get Lucky» ужо ў чарзе, баллы вернуты',
+          '@Ales «2112» даўжэйшая за 12 хв, балы вернуты',
+          '@Kasia Daft Punk — Get Lucky стала ў чаргу',
+          '@Ales «Get Lucky» ужо ў чарзе, балы вернуты',
         ]),
       WAIT,
     );
   });
 
-  it('стрымер прыбраў заказ (✕) — баллы вернуты', async () => {
+  it('стрымер прыбраў заказ (✕) — балы вернуты', async () => {
     const { make, twitch } = setup();
     const dock = make('dock');
     await ready(twitch);
@@ -206,7 +206,7 @@ describe('Twitch: заказы за баллы', () => {
     await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
     dock.removeRequest(dock.player.get().requests[0].key);
     await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
-    await vi.waitFor(() => expect(twitch.state.chat.at(-1)).toBe('@Kasia стрымер прыбраў «Never Gonna Give You Up» з чаргі, баллы вернуты'), WAIT);
+    await vi.waitFor(() => expect(twitch.state.chat.at(-1)).toBe('@Kasia «Never Gonna Give You Up» прыбралі з чаргі, балы вернуты'), WAIT);
   });
 
   it('паўторная дастаўка падзеі — адзін заказ', async () => {
@@ -231,13 +231,13 @@ describe('Twitch: заказы за баллы', () => {
     await vi.waitFor(() => expect(twitch.state.chat).toHaveLength(1), WAIT);
   });
 
-  it('Spotify не падключаны — заказ, які паспеў прайсці, адмяняецца з вяртаннем баллаў', async () => {
+  it('Spotify не падключаны — заказ, які паспеў прайсці, адмяняецца з вяртаннем балаў', async () => {
     const { make, twitch } = setup({ spotify: false });
     make('dock');
     await ready(twitch);
     const r = twitch.redeem('Kasia', RICK);
     await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
-    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Kasia замовы зараз не працуюць, баллы вернуты']), WAIT);
+    await vi.waitFor(() => expect(twitch.state.chat).toEqual(['@Kasia замовы зараз не працуюць, балы вернуты']), WAIT);
   });
 });
 
@@ -313,7 +313,7 @@ describe('Twitch: змена лідара і збоі', () => {
     expect(readLoginResult(storage)).toMatchObject({ ok: false, error: 'expired' });
   });
 
-  it('збой Twitch пры вяртанні баллаў — паўтор, пакуль не атрымаецца', async () => {
+  it('збой Twitch пры вяртанні балаў — паўтор, пакуль не атрымаецца', async () => {
     const { make, twitch } = setup();
     make('dock');
     await ready(twitch);

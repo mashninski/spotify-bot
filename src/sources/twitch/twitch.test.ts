@@ -61,7 +61,7 @@ function setup(outcome: RequestOutcome = { ok: true, title: 'Песня', n: 1 }
 }
 
 describe('Twitch у лідары', () => {
-  it('429 пры вяртанні баллаў — чакае каля паўхвіліны і паўтарае', async () => {
+  it('429 пры вяртанні балаў — чакае каля паўхвіліны і паўтарае', async () => {
     const { twitch, link, run } = setup({ ok: false, reason: 'not-found' });
     link.start();
     await run(3000);
@@ -79,7 +79,7 @@ describe('Twitch у лідары', () => {
     expect(twitch.state.chat).toEqual([chatText('Ales', { ok: false, reason: 'not-found' }, 'zzzz')]);
   });
 
-  it('заказы, зробленыя, калі бот не працаваў: свежы — у чаргу, стары — баллы вернуты', async () => {
+  it('заказы, зробленыя, калі бот не працаваў: свежы — у чаргу, стары — балы вернуты', async () => {
     const { twitch, link, run, handled, now } = setup();
     link.start();
     await run(3000);
@@ -91,7 +91,7 @@ describe('Twitch у лідары', () => {
     expect(handled).toEqual(['новы заказ']);
     expect(twitch.statusOf(old.id)).toBe('CANCELED');
     expect(twitch.statusOf(fresh.id)).toBe('UNFULFILLED');
-    expect(twitch.state.chat).toContain('@Old бот не працаваў у момант замовы, баллы вернуты');
+    expect(twitch.state.chat).toContain('@Old бот не працаваў у момант замовы, балы вернуты');
   });
 
   it('пакуль Spotify падключаецца, заказ чакае, а не адмяняецца', async () => {
@@ -108,7 +108,7 @@ describe('Twitch у лідары', () => {
     expect(handled).toEqual(['песня']);
   });
 
-  it('пусты заказ — баллы вернуты', async () => {
+  it('пусты заказ — балы вернуты', async () => {
     const { twitch, link, run, handled } = setup();
     link.start();
     await run(3000);
@@ -132,7 +132,7 @@ describe('Twitch у лідары', () => {
     expect(twitch.state.rewards[0].is_paused).toBe(true);
   });
 
-  it('песня двойчы знікла з чаргі, не пачаўшы граць, — адзін паўтор, потым баллы вернуты', async () => {
+  it('песня двойчы знікла з чаргі, не пачаўшы граць, — адзін паўтор, потым балы вернуты', async () => {
     const { twitch, link, run, handled, clearPlayer } = setup();
     link.start();
     await run(3000);
@@ -149,8 +149,8 @@ describe('Twitch у лідары', () => {
   });
 
   it('паведамленне пра прынятую замову: «Гурт — Назва стала ў чаргу»; доўгія назвы скарачаюцца', () => {
-    expect(chatText('u', { ok: true, title: 'Pneuma', artist: 'TOOL', n: 1 })).toBe('TOOL — Pneuma стала ў чаргу');
-    expect(chatText('u', { ok: true, title: 'Pneuma', n: 1 })).toBe('Pneuma стала ў чаргу');
+    expect(chatText('u', { ok: true, title: 'Pneuma', artist: 'TOOL', n: 1 })).toBe('@u TOOL — Pneuma стала ў чаргу');
+    expect(chatText('u', { ok: true, title: 'Pneuma', n: 1 })).toBe('@u Pneuma стала ў чаргу');
     const text = chatText('u', { ok: true, title: 'x'.repeat(300), artist: 'y'.repeat(300), n: 2 });
     expect(text.length).toBeLessThan(200);
   });

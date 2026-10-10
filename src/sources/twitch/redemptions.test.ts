@@ -32,15 +32,15 @@ describe('журнал заказаў Twitch', () => {
     expect(after.records.r1.stage).toBe('queued');
   });
 
-  it('адмова: спачатку вяртанне баллаў, паведамленне — толькі пасля', () => {
+  it('адмова: спачатку вяртанне балаў, паведамленне — толькі пасля', () => {
     let log = rl.track(rl.emptyLog(), { id: 'r1', ...base }, 0)!;
-    log = rl.refund(log, 'r1', 'not-found', 'не знайшоў, баллы вернуты', 0);
+    log = rl.refund(log, 'r1', 'not-found', 'не знайшоў, балы вернуты', 0);
     expect(rl.nextTask(log, 0)).toMatchObject({ kind: 'status', status: 'CANCELED' });
     log = rl.statusFailed(log, 'r1', 0);
     expect(rl.nextTask(log, 1000)).toBeNull(); // паўза перад паўторам
     expect(rl.nextTask(log, 5000)).toMatchObject({ kind: 'status' });
     log = rl.statusDone(log, 'r1', 6000);
-    expect(rl.nextTask(log, 6000)).toMatchObject({ kind: 'chat', text: 'не знайшоў, баллы вернуты' });
+    expect(rl.nextTask(log, 6000)).toMatchObject({ kind: 'chat', text: 'не знайшоў, балы вернуты' });
   });
 
   it('калі статус ужо змяніў стрымер — паведамленне не адпраўляецца', () => {
