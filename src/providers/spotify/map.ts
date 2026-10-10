@@ -1,6 +1,7 @@
 // Пераўтварэнне адказаў Spotify Web API ў нашы тыпы (ADR-016). Чыстыя функцыі — лёгка тэставаць.
 
 import { HISTORY_LIMIT, RESTART_THRESHOLD_MS } from '../../core/queue';
+import { hideSent, reconcileQueue, withoutSent } from '../../core/requests';
 import type { PlayerState, QueueItem, Track } from '../../core/types';
 
 /** Тое, што бот ведае пра плэер Spotify пасля аднаго апытання. */
@@ -76,23 +77,38 @@ export function canSave(track: Track | null | undefined): boolean {
 export const CONTEXT_LIMIT = 10;
 
 /**
- * Пераносіць вынік апытання Spotify у стан плэера. Заказы гледачоў (`requests`) не кранае.
+ * Пераносіць вынік апытання Spotify у стан плэера.
  * `queue: null` — чарга не перачытвалася: калі песня змянілася на першую з чаргі, яна проста здымаецца з чаргі.
+ * Заказы гледачоў (ADR-017): калі зайграў адпраўлены ў Spotify заказ, ён становіцца бягучым з нікам гледача;
+ * у «Далей у Spotify» ён не паказваецца другі раз; пасля чытання чаргі — зверка (`reconcileQueue`).
  */
-export function applyPlayback(state: PlayerState, playback: SpotifyPlayback | null, queue: Track[] | null): PlayerState {
+export function applyPlayback(
+  state: PlayerState,
+  playback: SpotifyPlayback | null,
+  queue: Track[] | null,
+  now = Date.now(),
+): PlayerState {
   const track = playback?.track ?? null;
   if (!playback || !track) {
     return { ...state, current: null, isPlaying: false, progressMs: 0, context: queue ? [] : state.context };
   }
   const same = state.current?.track.uri === track.uri;
-  const current = same && state.current ? { ...state.current, track } : { key: `sp:${track.uri}`, track };
+  let requests = state.requests;
+  let current: QueueItem;
+  if (same && state.current) current = { ...state.current, track };
+  else if (requests[0]?.sentAt !== undefined && requests[0].track.uri === track.uri) {
+    current = { ...withoutSent(requests[0]), track };
+    requests = requests.slice(1);
+  } else current = { key: `sp:${track.uri}`, track };
   let context = state.context;
-  if (queue) context = contextItems(queue.slice(0, CONTEXT_LIMIT));
-  else if (!same && context[0]?.track.uri === track.uri) context = context.slice(1);
+  if (!queue && !same && context[0]?.track.uri === track.uri) context = context.slice(1);
   // Прайграныя песні патрэбны, каб «Папярэдняя» паказала вынік адразу, яшчэ да адказу Spotify.
   let history = state.history;
   if (!same && state.current) history = [...history, state.current].slice(-HISTORY_LIMIT);
-  return { ...state, current, isPlaying: playback.isPlaying, progressMs: playback.progressMs, context, history };
+  const next = { ...state, current, isPlaying: playback.isPlaying, progressMs: playback.progressMs, context, history, requests };
+  if (!queue) return next;
+  const checked = reconcileQueue(next, track.uri ?? '', queue.map((t) => t.uri ?? ''), now);
+  return { ...checked, context: hideSent(contextItems(queue), checked).slice(0, CONTEXT_LIMIT) };
 }
 
 /**
@@ -116,6 +132,7 @@ function contextItems(tracks: Track[]): QueueItem[] {
  */
 export function optimisticSkip(state: PlayerState, direction: 'next' | 'previous'): PlayerState {
   if (direction === 'next') {
+    // «Наступная» з заказамі робіць мозг: першы заказ пачынае граць (`startRequest`).
     const [next, ...context] = state.context;
     if (!next) return state;
     const history = state.current ? [...state.history, state.current].slice(-HISTORY_LIMIT) : state.history;

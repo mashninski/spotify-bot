@@ -58,9 +58,15 @@ function parseItem(raw: unknown): QueueItem | null {
   if (!isObject(raw) || typeof raw.key !== 'string') return null;
   const track = parseTrack(raw.track);
   if (!track) return null;
-  return typeof raw.requestedBy === 'string' && raw.requestedBy
-    ? { key: raw.key, track, requestedBy: raw.requestedBy }
-    : { key: raw.key, track };
+  const item: QueueItem = { key: raw.key, track };
+  if (typeof raw.requestedBy === 'string' && raw.requestedBy) item.requestedBy = raw.requestedBy;
+  // Адзнака «ужо ў Spotify» (ADR-017): без яе новы лідар адправіў бы заказ другі раз.
+  if (typeof raw.sentAt === 'number' && Number.isFinite(raw.sentAt)) item.sentAt = raw.sentAt;
+  return item;
+}
+
+function parseSkip(raw: unknown): PlayerState['skip'] {
+  return isObject(raw) && typeof raw.uri === 'string' && raw.uri && typeof raw.at === 'number' ? { uri: raw.uri, at: raw.at } : null;
 }
 
 function parseItems(raw: unknown): QueueItem[] | null {
@@ -78,5 +84,14 @@ function parseState(raw: unknown): PlayerState | null {
   const history = parseItems(raw.history);
   if (!requests || !context || !history) return null;
   const progressMs = typeof raw.progressMs === 'number' && raw.progressMs >= 0 ? raw.progressMs : 0;
-  return { current, isPlaying: raw.isPlaying === true && current !== null, progressMs, requests, context, history };
+  const skip = parseSkip(raw.skip);
+  return {
+    current,
+    isPlaying: raw.isPlaying === true && current !== null,
+    progressMs,
+    requests,
+    context,
+    history,
+    ...(skip ? { skip } : {}),
+  };
 }

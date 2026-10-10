@@ -83,6 +83,49 @@ describe('стан плэера са Spotify', () => {
   });
 });
 
+describe('заказы гледачоў у Spotify (ADR-017)', () => {
+  const play = (id: string) => ({ isPlaying: true, progressMs: 0, track: track(id), device: 'ПК', volume: null, supportsVolume: false });
+
+  it('адпраўлены заказ зайграў — ён бягучы з нікам гледача і ключом заказу, у чарзе заказаў яго больш няма', () => {
+    const base = {
+      ...q.emptyPlayerState(),
+      current: { key: 'sp:a', track: track('a') },
+      requests: [
+        { key: 'req1', track: track('r'), requestedBy: 'kasia', sentAt: 1 },
+        { key: 'req2', track: track('z'), requestedBy: 'ales' },
+      ],
+    };
+    const s = applyPlayback(base, play('r'), [track('b')], 5);
+    expect(s.current).toEqual({ key: 'req1', track: track('r'), requestedBy: 'kasia' });
+    expect(s.requests.map((r) => r.key)).toEqual(['req2']);
+    expect(s.history.at(-1)?.key).toBe('sp:a');
+  });
+
+  it('неадпраўлены заказ з той жа песняй не «краде» песню, што грае з плэйліста', () => {
+    const base = { ...q.emptyPlayerState(), requests: [{ key: 'req1', track: track('r'), requestedBy: 'kasia' }] };
+    const s = applyPlayback(base, play('r'), null);
+    expect(s.current?.requestedBy).toBeUndefined();
+    expect(s.requests).toHaveLength(1);
+  });
+
+  it('адпраўлены заказ стаіць у чарзе Spotify — у «Далей у Spotify» яго няма (не двойчы)', () => {
+    const base = { ...q.emptyPlayerState(), requests: [{ key: 'req1', track: track('r'), requestedBy: 'kasia', sentAt: 1 }] };
+    const s = applyPlayback(base, play('a'), [track('r'), track('b')], 2);
+    expect(s.context.map((c) => c.track.id)).toEqual(['b']);
+    expect(q.toOverlayState(s).upcoming.map((u) => [u.title, u.requestedBy])).toEqual([
+      ['Песня r', 'kasia'],
+      ['Песня b', undefined],
+    ]);
+  });
+
+  it('Spotify аднавіў чаргу з нашым заказам — заказ лічыцца адпраўленым і не паказваецца двойчы', () => {
+    const base = { ...q.emptyPlayerState(), requests: [{ key: 'req1', track: track('r'), requestedBy: 'kasia' }] };
+    const s = applyPlayback(base, play('a'), [track('r'), track('b')], 7);
+    expect(s.requests[0].sentAt).toBe(7);
+    expect(s.context.map((c) => c.track.id)).toEqual(['b']);
+  });
+});
+
 
 const pb = (id: string, progressMs = 0): SpotifyPlayback => ({
   isPlaying: true,

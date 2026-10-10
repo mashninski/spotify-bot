@@ -69,4 +69,18 @@ describe('захаванне чаргі', () => {
     expect(loaded.progressMs).toBe(20_000);
     expect(loaded.context).toHaveLength(1);
   });
+
+  it('адзнака «ужо ў Spotify» і выдалены адпраўлены заказ перажываюць змену лідара', () => {
+    const storage = memoryStorage();
+    const uri = 'spotify:track:r';
+    const s: PlayerState = {
+      ...sample(false),
+      requests: [{ key: 'r#1', track: { ...track('r'), uri }, requestedBy: 'kasia', sentAt: 123 }],
+      skip: { uri: 'spotify:track:z', at: 100 },
+    };
+    savePlayer(storage, s, 0);
+    const loaded = loadPlayer(storage, 0)!;
+    expect(loaded.requests[0].sentAt).toBe(123);
+    expect(loaded.skip).toEqual({ uri: 'spotify:track:z', at: 100 });
+  });
 });
