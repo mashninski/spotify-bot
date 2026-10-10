@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy": "npm run build && node scripts/deploy.mjs"
   },
   "repository": {
     "type": "git",
@@ -25,5 +26,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.3"
+  },
+  "deploy": {
+    "repo": "https://github.com/mashninski/spotify-bot-app.git"
   }
 }
