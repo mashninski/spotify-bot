@@ -11,7 +11,7 @@ import type { Store } from '../core/store';
 import { startTicker } from '../core/ticker';
 import type { PlayerState, QueueItem, Track } from '../core/types';
 import { t } from '../i18n';
-import { levelFromMeters, simulatedLevel } from '../obs/audio';
+import { createAutoGain, dbFromMeters, levelFromMeters, simulatedLevel } from '../obs/audio';
 import { OverlaySender } from '../obs/channel';
 import { ObsClient } from '../obs/client';
 import { EventSubscription, type InputVolumeMetersEvent } from '../obs/protocol';
@@ -96,6 +96,9 @@ export function createBrain(options: BrainOptions) {
   let sendingKey: string | null = null;
   let nextSendAt = 0;
   let testQueryIndex = 0;
+  /** Аўтаўзмацненне хвалі для выбранай крыніцы гуку (нанова пры змене крыніцы). */
+  let autoGain = createAutoGain();
+  let autoGainSource = '';
   let running = false;
   /** Песні мяняе Spotify (ёсць токены), а не ўнутраны таймер. */
   let spotifyMode = false;
@@ -390,7 +393,14 @@ export function createBrain(options: BrainOptions) {
       for (const input of inputs) levels[input.inputName] = levelFromMeters(input.inputLevelsMul);
       stores.meters.set(levels);
       const source = settings.get().audioSource;
-      if (source && source !== SIMULATED_AUDIO) sendLevel(levels[source] ?? 0);
+      if (source && source !== SIMULATED_AUDIO) {
+        if (source !== autoGainSource) {
+          autoGain = createAutoGain();
+          autoGainSource = source;
+        }
+        const input = inputs.find((i) => i.inputName === source);
+        sendLevel(autoGain.level(input ? dbFromMeters(input.inputLevelsMul) : -Infinity, Date.now()));
+      }
     });
     client.connect();
   }

@@ -17,15 +17,48 @@ export function dbToLevel(db: number, floorDb = FLOOR_DB, ceilingDb = CEILING_DB
   return (db - floorDb) / (ceilingDb - floorDb);
 }
 
-/** Узровень крыніцы 0…1: найгучнейшы канал па magnitude (больш роўны, чым peak). */
-export function levelFromMeters(inputLevelsMul: unknown): number {
-  if (!Array.isArray(inputLevelsMul)) return 0;
+/** Гучнасць крыніцы ў дБ: найгучнейшы канал па magnitude (больш роўны, чым peak). */
+export function dbFromMeters(inputLevelsMul: unknown): number {
+  if (!Array.isArray(inputLevelsMul)) return -Infinity;
   let max = 0;
   for (const channel of inputLevelsMul) {
     const magnitude = Array.isArray(channel) ? Number(channel[0]) : 0;
     if (Number.isFinite(magnitude) && magnitude > max) max = magnitude;
   }
-  return dbToLevel(mulToDb(max));
+  return mulToDb(max);
+}
+
+/** Узровень крыніцы 0…1 па абсалютнай шкале (зялёная палоска каля крыніцы ў наладах дока). */
+export function levelFromMeters(inputLevelsMul: unknown): number {
+  return dbToLevel(dbFromMeters(inputLevelsMul));
+}
+
+/** Ціхэй за гэта — цішыня: аўтаўзмацненне не цягне шум уверх. */
+export const SILENCE_DB = -62;
+/** Колькі дБ ніжэй за нядаўні пік яшчэ рухаюць хвалю (менш — выразней удары). */
+export const AUTO_RANGE_DB = 18;
+
+/**
+ * Аўтаўзмацненне для хвалі ў оверлеі: шкала падладжваецца пад нядаўнюю гучнасць музыкі.
+ * Ціхая фонавая музыка рухае хвалю гэтак жа выразна, як гучная; цішыня (паміж песнямі) — 0.
+ * Пік хутка падымаецца на гучных месцах і павольна (каля 5 с) апускаецца на ціхіх; у цішыні застаецца.
+ */
+export function createAutoGain(attackMs = 250, releaseMs = 5000) {
+  /** `null` — гуку яшчэ не было: пачынаем з першага гуку. */
+  let peak: number | null = null;
+  let lastAt = 0;
+  return {
+    level(db: number, now: number): number {
+      const dt = lastAt ? Math.min(1000, Math.max(0, now - lastAt)) : 50;
+      lastAt = now;
+      if (!Number.isFinite(db) || db < SILENCE_DB) return 0;
+      if (peak === null) peak = db;
+      const tau = db > peak ? attackMs : releaseMs;
+      peak += (db - peak) * (1 - Math.exp(-dt / tau));
+      peak = Math.min(CEILING_DB, Math.max(SILENCE_DB + AUTO_RANGE_DB, peak));
+      return dbToLevel(db, peak - AUTO_RANGE_DB, peak + 1);
+    },
+  };
 }
 
 /** Згладжванне: хутка ўзрастае на ўдары, павольна спадае. */

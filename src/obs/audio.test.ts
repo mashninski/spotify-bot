@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CEILING_DB, dbToLevel, FLOOR_DB, levelFromMeters, mulToDb, simulatedLevel, smoothLevel } from './audio';
+import { CEILING_DB, createAutoGain, dbToLevel, FLOOR_DB, levelFromMeters, mulToDb, simulatedLevel, smoothLevel } from './audio';
 
 describe('узровень гуку', () => {
   it('пераўтварэнне ў дБ', () => {
@@ -36,5 +36,35 @@ describe('узровень гуку', () => {
       expect(l).toBeGreaterThanOrEqual(0);
       expect(l).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe('аўтаўзмацненне хвалі', () => {
+  /** «Музыка»: удары на `base` дБ і правалы на 10 дБ ціхэй, кожныя 0,5 с; вяртае размах узроўню за апошнія 2 с. */
+  function swing(gain: ReturnType<typeof createAutoGain>, base: number, fromMs: number, seconds: number) {
+    const levels: number[] = [];
+    for (let t = fromMs; t < fromMs + seconds * 1000; t += 50) {
+      const db = (t % 500) < 150 ? base : base - 10;
+      const level = gain.level(db, t);
+      if (t >= fromMs + (seconds - 2) * 1000) levels.push(level);
+    }
+    return Math.max(...levels) - Math.min(...levels);
+  }
+
+  it('ціхая музыка рухае хвалю гэтак жа выразна, як гучная', () => {
+    const loud = swing(createAutoGain(), -12, 0, 10);
+    const quiet = swing(createAutoGain(), -42, 0, 10);
+    expect(quiet).toBeGreaterThan(0.4);
+    expect(Math.abs(loud - quiet)).toBeLessThan(0.05);
+    // Без аўтаўзмацнення ціхая музыка амаль не рухала б хвалю.
+    expect(dbToLevel(-42) - dbToLevel(-52)).toBeLessThan(0.2);
+  });
+
+  it('пасля гучнай песні ціхая праз некалькі секунд зноў выразная; цішыня — 0', () => {
+    const gain = createAutoGain();
+    swing(gain, -10, 0, 10);
+    expect(swing(gain, -40, 10_000, 15)).toBeGreaterThan(0.4);
+    expect(gain.level(-Infinity, 30_000)).toBe(0);
+    expect(gain.level(-70, 30_050)).toBe(0);
   });
 });
