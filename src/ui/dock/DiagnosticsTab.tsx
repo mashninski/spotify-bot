@@ -1,16 +1,26 @@
-// Укладка «Праверка»: дзе працуе бот (ADR-015), рызыкі ADR-009 (схаваны док, перанакіраванне) і стан канала да оверлея.
+// Укладка «Праверка»: стан бота, Spotify, Twitch і OBS — коратка, радкамі «назва — значэнне».
 
-import { safeLocalStorage } from '../../core/settings';
-import { formatDuration, t } from '../../i18n';
-import { obsBrowserInfo, readJson, REDIRECT_RESULT_KEY, type RedirectResult } from '../shared/diag';
+import type { ComponentChildren } from 'preact';
+import { t, type MessageKey } from '../../i18n';
+import { obsBrowserInfo } from '../shared/diag';
 import { useNow, useStore } from '../shared/hooks';
-import { clock, leaderText } from '../shared/leader';
+import { clock } from '../shared/leader';
 import type { DockController } from './controller';
 import { Section } from './Section';
 
+type Tone = '' | 'good' | 'bad' | 'muted';
+
+function Row({ label, tone = '', children }: { label: string; tone?: Tone; children: ComponentChildren }) {
+  return (
+    <div class="kv">
+      <span class="kv-label">{label}</span>
+      <span class={`kv-value ${tone}`}>{children}</span>
+    </div>
+  );
+}
+
 export function DiagnosticsTab({ controller }: { controller: DockController }) {
   useNow(1000);
-  const monitor = useStore(controller.monitor.state);
   const channel = useStore(controller.channel);
   const obs = useStore(controller.obs);
   const leader = useStore(controller.leader);
@@ -18,95 +28,66 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
   const spotify = useStore(controller.spotify);
   const twitch = useStore(controller.twitch);
   const env = obsBrowserInfo();
-  const redirect = readJson<RedirectResult>(safeLocalStorage(), REDIRECT_RESULT_KEY);
+
+  const where = !leader ? 'none' : leader.id === controller.id ? `here.${leader.page}` : leader.page;
+  const windowTone: Tone = spotify.windowWatch === 'ok' ? 'good' : 'muted';
+  const eventsTone: Tone = twitch.events === 'ok' ? 'good' : twitch.events === 'off' ? 'bad' : 'muted';
 
   return (
     <div class="diagnostics">
       <Section title={t('diag.brain')} help={t('diag.brain.help')}>
-        <p class="small">
-          <b>{leaderText(leader, controller.id, 'dock')}</b>
-          {leader && ` ${t('diag.brain.since', { time: clock(leader.since) })}`}
-        </p>
-        <p class={`small ${controller.locksSupported ? '' : 'bad'}`}>
-          {controller.locksSupported ? t('diag.brain.locks') : t('diag.brain.noLocks')}
-        </p>
-        {conflicts > 0 && <p class="small bad">{t('diag.brain.conflicts', { n: conflicts })}</p>}
-      </Section>
-
-      <Section title={t('diag.spotify')} help={t('diag.spotify.help')}>
-        <p class="small">{t('diag.spotify.requests', { n: spotify.requestsToday })}</p>
-        {spotify.status !== 'off' && (
-          <p class={`small ${spotify.windowWatch === 'ok' ? 'good' : 'muted'}`}>{t(`diag.spotify.window.${spotify.windowWatch}`)}</p>
+        <Row label={t('diag.brain.where')} tone={where === 'none' ? 'bad' : ''}>
+          {t(`diag.brain.where.${where}` as MessageKey)}
+        </Row>
+        {leader && <Row label={t('diag.brain.since')}>{clock(leader.since)}</Row>}
+        {!controller.locksSupported && (
+          <Row label={t('diag.brain.choice')} tone="bad">
+            {t('diag.brain.dockOnly')}
+          </Row>
+        )}
+        {conflicts > 0 && (
+          <Row label={t('diag.brain.conflicts')} tone="bad">
+            {conflicts}
+          </Row>
         )}
       </Section>
 
-      {twitch.status !== 'off' && (
-        <Section title={t('diag.twitch')} help={t('diag.twitch.help')}>
-          <p class={`small ${twitch.events === 'ok' ? 'good' : 'muted'}`}>{t(`diag.twitch.events.${twitch.events}`)}</p>
-          <p class="small">{twitch.lastEventAt ? t('diag.twitch.lastEvent', { time: clock(twitch.lastEventAt) }) : t('diag.twitch.noEvents')}</p>
-          <p class="small">{t('diag.twitch.pending', { n: twitch.pending })}</p>
+      {spotify.status !== 'off' && (
+        <Section title={t('diag.spotify')} help={t('diag.spotify.help')}>
+          <Row label={t('diag.spotify.requests')}>{spotify.requestsToday}</Row>
+          <Row label={t('diag.spotify.window')} tone={windowTone}>
+            {t(`diag.spotify.window.${spotify.windowWatch}`)}
+          </Row>
         </Section>
       )}
 
-      <Section title={t('diag.env')} help={t('diag.env.help')}>
-        <p class="small">{env.inObs ? `${t('diag.env.obs')} ${env.version}` : t('diag.env.notObs')}</p>
-        <p class="small">
-          {t('diag.channel')}: <b>{t(`settings.obs.channel.${channel.mode}`)}</b> · {t('diag.channel.stats', { sent: channel.sent, errors: channel.errors })}
-        </p>
-        {obs.version && <p class="small">{t('diag.obsVersion', { version: obs.version })}</p>}
+      {twitch.status !== 'off' && (
+        <Section title={t('diag.twitch')} help={t('diag.twitch.help')}>
+          <Row label={t('diag.twitch.events')} tone={eventsTone}>
+            {t(`diag.twitch.events.${twitch.events}`)}
+          </Row>
+          <Row label={t('diag.twitch.lastEvent')} tone={twitch.lastEventAt ? '' : 'muted'}>
+            {twitch.lastEventAt ? clock(twitch.lastEventAt) : t('diag.none')}
+          </Row>
+          <Row label={t('diag.twitch.pending')} tone={twitch.pending ? 'bad' : ''}>
+            {twitch.pending}
+          </Row>
+        </Section>
+      )}
+
+      <Section title={t('diag.obs')} help={t('diag.obs.help')}>
+        <Row label={t('diag.obs.page')}>{env.inObs ? `OBS ${env.version}` : t('diag.obs.notObs')}</Row>
+        <Row label="obs-websocket" tone={obs.version ? '' : 'muted'}>
+          {obs.version || t('diag.none')}
+        </Row>
+        <Row label={t('diag.obs.channel')} tone={channel.mode === 'none' ? 'muted' : ''}>
+          {t(`diag.obs.channel.${channel.mode}`)}
+        </Row>
+        <Row label={t('diag.obs.sent')}>{channel.sent}</Row>
+        <Row label={t('diag.obs.errors')} tone={channel.errors ? 'bad' : ''}>
+          {channel.errors}
+        </Row>
         {channel.lastError && <p class="muted small mono">{channel.lastError}</p>}
-      </Section>
-
-      <Section title={t('diag.hidden')} help={t('diag.hidden.help')}>
-        <p class="small">
-          {t('diag.hidden.visibility')}: <b>{monitor.visible ? t('diag.hidden.visible') : t('diag.hidden.hiddenNow')}</b>
-        </p>
-        <p class="small">
-          {monitor.previousAliveAt
-            ? t('diag.hidden.session', { loaded: clock(monitor.loadedAt), prev: clock(monitor.previousAliveAt) })
-            : t('diag.hidden.firstLoad', { loaded: clock(monitor.loadedAt) })}
-        </p>
-        <p class="small">
-          {t('diag.hidden.overall', {
-            main: formatDuration(monitor.mainMaxGapMs),
-            worker: formatDuration(monitor.workerMaxGapMs),
-          })}
-        </p>
-        {monitor.periods.length === 0 ? (
-          <p class="muted small">{t('diag.hidden.none')}</p>
-        ) : (
-          <ul class="periods">
-            {monitor.periods.map((p) => (
-              <li key={p.start}>
-                <b>
-                  {clock(p.start)} · {t('diag.hidden.period', { duration: formatDuration(p.end - p.start) })}
-                </b>
-                <div>{t('diag.hidden.mainGap', { gap: formatDuration(p.mainMaxGapMs) })}</div>
-                <div>{t('diag.hidden.workerGap', { gap: formatDuration(p.workerMaxGapMs) })}</div>
-                <div>{t('diag.hidden.obsEvents', { n: p.obsEvents })}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section title={t('diag.redirect')} help={t('diag.redirect.help')}>
-        <button class="btn primary" onClick={controller.runRedirectTest}>
-          {t('diag.redirect.run')}
-        </button>
-        <p class={`small ${redirect ? (redirect.ok ? 'good' : 'bad') : 'muted'}`}>
-          {!redirect
-            ? t('diag.redirect.never')
-            : redirect.ok
-              ? t('diag.redirect.ok', { host: redirect.via, at: clock(redirect.at) })
-              : t('diag.redirect.lost', { at: clock(redirect.at) })}
-        </p>
-      </Section>
-
-      <Section title={t('diag.popup')} help={t('diag.popup.help')}>
-        <button class="btn" onClick={controller.runPopupTest}>
-          {t('diag.popup.run')}
-        </button>
       </Section>
     </div>
   );

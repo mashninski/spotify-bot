@@ -485,15 +485,24 @@ select:focus {
 }
 
 /* Праверка */
-.periods {
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
+/* «Праверка»: радкі «назва — значэнне», без фону і рамак (ADR-014). */
+.kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
   font-size: 12px;
 }
-.periods li {
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
+.kv-label {
+  color: var(--muted);
+}
+.kv-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kv-value.muted {
+  color: var(--muted);
 }
 
 /* Кнопкі плэера з рэгулятарам гучнасці справа (як у Spotify). */

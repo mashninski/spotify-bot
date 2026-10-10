@@ -1,26 +1,16 @@
 // Док: удзельнік «мозгу» (ADR-015) плюс тое, што ёсць толькі ў доку — уваход у Spotify (ADR-016) і Twitch (ADR-018),
-// дыягностыка схаванага дока і праверка перанакіравання. Стан і каманды — праз BrainNode: мозг можа працаваць тут або ў оверлеі.
+// і адзнака для debug-оверлэя. Стан і каманды — праз BrainNode: мозг можа працаваць тут або ў оверлэі.
 
-import { randomId } from '../../core/id';
 import { safeLocalStorage } from '../../core/settings';
 import { createStore } from '../../core/store';
 import { isTwitchClientId, startDeviceLogin, type DeviceCode } from '../../sources/twitch/auth';
 import { createBrainNode } from '../../brain/node';
 import { redirectUriFor, startLogin } from '../../providers/spotify/auth';
-import { DIAG_MARKER_KEY, REDIRECT_PENDING_KEY, REDIRECT_SERVICE, writeJson } from '../shared/diag';
-import { HiddenMonitor } from './hidden-monitor';
+import { DIAG_MARKER_KEY, writeJson } from '../shared/diag';
 
 export function createDockController() {
   const storage = safeLocalStorage();
-  const monitor = new HiddenMonitor(storage);
-  const node = createBrainNode({ page: 'dock', storage, onObsEvent: () => monitor.countObsEvent() });
-
-  function runRedirectTest(): void {
-    const nonce = randomId();
-    writeJson(storage, REDIRECT_PENDING_KEY, { nonce, at: Date.now() });
-    const back = new URL(`callback.html?test=redirect&nonce=${nonce}`, location.href).toString();
-    location.href = `${REDIRECT_SERVICE}?url=${encodeURIComponent(back)}`;
-  }
+  const node = createBrainNode({ page: 'dock', storage });
 
   /** Пераход усёй старонкі дока на ўваход у Spotify; Spotify верне на callback.html (ADR-016). */
   async function connectSpotify(): Promise<void> {
@@ -65,28 +55,19 @@ export function createDockController() {
     window.open(code.verificationUri, '_blank');
   }
 
-  function runPopupTest(): void {
-    window.open(new URL('callback.html?test=popup', location.href).toString(), '_blank');
-  }
-
   return {
     ...node,
-    monitor,
 
     start() {
       writeJson(storage, DIAG_MARKER_KEY, Date.now());
-      monitor.start();
       node.start();
     },
 
     stop() {
       cancelLogin?.();
       node.stop();
-      monitor.stop();
     },
 
-    runRedirectTest,
-    runPopupTest,
     connectSpotify,
     twitchLogin,
     connectTwitch,

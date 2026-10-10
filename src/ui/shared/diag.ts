@@ -1,18 +1,7 @@
-// Агульныя ключы і функцыі дыягностыкі для дока, оверлея і старонкі вяртання.
+// Агульныя ключы і функцыі дыягностыкі для дока і debug-оверлэя.
 
+/** Док адзначае, што ён загрузіўся: debug-оверлэй па гэтай адзнацы бачыць, ці агульны ў іх localStorage. */
 export const DIAG_MARKER_KEY = 'spotify-bot:diag:dock-marker';
-export const REDIRECT_PENDING_KEY = 'spotify-bot:diag:redirect-pending';
-export const REDIRECT_RESULT_KEY = 'spotify-bot:diag:redirect-result';
-
-/** Знешні https-сэрвіс, які адразу перанакіроўвае назад (імітацыя ўваходу ў Spotify/Twitch). */
-export const REDIRECT_SERVICE = 'https://httpbin.org/redirect-to';
-
-export interface RedirectResult {
-  ok: boolean;
-  storageKept: boolean;
-  at: number;
-  via: string;
-}
 
 export function readJson<T>(storage: Storage | null, key: string): T | null {
   try {
