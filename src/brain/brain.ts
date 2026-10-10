@@ -237,10 +237,12 @@ export function createBrain(options: BrainOptions) {
         const key = `${result.status}|${result.title ?? ''}`;
         if (lastWindowKey !== null && key !== lastWindowKey) spotify.nudge();
         lastWindowKey = key;
+        spotify.setWindowWatched(result.status === 'ok' || result.status === 'no-window');
         if (stores.spotify.get().windowWatch !== result.status) stores.spotify.set((s) => ({ ...s, windowWatch: result.status }));
         nextWindowCheckAt = Date.now() + (result.status === 'no-source' ? WINDOW_CHECK_IDLE_MS : WINDOW_CHECK_MS);
       })
       .catch(() => {
+        spotify.setWindowWatched(false);
         nextWindowCheckAt = Date.now() + WINDOW_CHECK_IDLE_MS;
       })
       .finally(() => {
@@ -298,6 +300,7 @@ export function createBrain(options: BrainOptions) {
         });
       } else {
         windowReader = null;
+        spotify.setWindowWatched(false);
         stores.spotify.set((s) => (s.windowWatch === 'unknown' ? s : { ...s, windowWatch: 'unknown' }));
         sender.detach();
         updateChannel();

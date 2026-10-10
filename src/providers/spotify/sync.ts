@@ -13,6 +13,13 @@ export const POLL = {
   paused: 15_000,
   /** Spotify нідзе не адкрыты: каб пасля адкрыцця Spotify бот хутка гэта заўважыў. */
   idle: 15_000,
+  /**
+   * Тое ж, калі бот бачыць акно Spotify праз OBS: пра змену песні, паўзу і адкрыццё Spotify скажа загаловак акна,
+   * а апытанне патрэбна толькі, каб выправіць час песні (стрымер мог перамотваць) і заўважыць змены на іншых прыладах.
+   */
+  playingWatched: 20_000,
+  pausedWatched: 30_000,
+  idleWatched: 30_000,
   /** Пасля канца песні — каб пераход на наступную быў відаць амаль адразу. */
   endGrace: 500,
   min: 1000,
@@ -35,11 +42,11 @@ export const POLL = {
 } as const;
 
 /** Калі апытаць зноў пасля такога стану плэера. */
-export function pollDelay(playback: SpotifyPlayback | null): number {
-  if (!playback?.track) return POLL.idle;
-  if (!playback.isPlaying) return POLL.paused;
+export function pollDelay(playback: SpotifyPlayback | null, windowWatched = false): number {
+  if (!playback?.track) return windowWatched ? POLL.idleWatched : POLL.idle;
+  if (!playback.isPlaying) return windowWatched ? POLL.pausedWatched : POLL.paused;
   const remaining = playback.track.durationMs - playback.progressMs;
-  return Math.max(POLL.min, Math.min(POLL.playing, remaining + POLL.endGrace));
+  return Math.max(POLL.min, Math.min(windowWatched ? POLL.playingWatched : POLL.playing, remaining + POLL.endGrace));
 }
 
 export type SpotifyStatus =
@@ -127,6 +134,9 @@ export function createSpotifySync(options: SpotifySyncOptions) {
   let expectation: Expectation | null = null;
   /** Павялічваецца пры кожнай кнопцы: вынік апытання, пачатага да кнопкі, ужо састарэлы. */
   let generation = 0;
+
+  /** Бот бачыць акно Spotify праз OBS — можна апытваць радзей. */
+  let windowWatched = false;
 
   let pendingVolume: number | null = null;
   let volumeBusy = false;
@@ -255,7 +265,7 @@ export function createSpotifySync(options: SpotifySyncOptions) {
         info.supportsVolume = playback?.supportsVolume ?? false;
       }
       options.onInfo(info);
-      nextPollAt = now() + pollDelay(playback);
+      nextPollAt = now() + pollDelay(playback, windowWatched);
       if (changed) {
         const track = playback?.track;
         if (track && canSave(track)) {
@@ -340,6 +350,13 @@ export function createSpotifySync(options: SpotifySyncOptions) {
       if (!active) return;
       flushVolume();
       if (!busy && at >= nextPollAt) void poll();
+    },
+
+    /** Ці бачыць бот акно Spotify праз OBS. Калі перастаў бачыць — вяртаемся да частага апытання. */
+    setWindowWatched(watched: boolean): void {
+      if (watched === windowWatched) return;
+      windowWatched = watched;
+      if (!watched && active) pollSoon(POLL.playing);
     },
 
     /** Нешта ў Spotify, падобна, змянілася (загаловак акна) — апытаць хутчэй, калі можна. */

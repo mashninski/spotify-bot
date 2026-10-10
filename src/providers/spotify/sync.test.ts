@@ -29,6 +29,13 @@ describe('інтэрвалы апытання Spotify', () => {
     expect(pollDelay({ isPlaying: false, progressMs: 0, track: null, device: '', volume: null, supportsVolume: false })).toBe(POLL.idle);
   });
 
+  it('калі бот бачыць акно Spotify праз OBS — апытвае радзей, а ў канцы песні — як і раней', () => {
+    expect(pollDelay(playback(true, 10_000), true)).toBe(POLL.playingWatched);
+    expect(pollDelay(playback(true, 177_000), true)).toBe(3000 + POLL.endGrace);
+    expect(pollDelay(playback(false, 10_000), true)).toBe(POLL.pausedWatched);
+    expect(pollDelay(null, true)).toBe(POLL.idleWatched);
+  });
+
   it('за гадзіну музыкі — не больш за ~600 апытанняў стану', () => {
     expect(3600_000 / POLL.playing).toBeLessThanOrEqual(600);
   });
