@@ -50,6 +50,7 @@ export const be = {
   'settings.audio.none': '— не выбрана —',
   'settings.audio.simulated': '— імітацыя (без OBS) —',
   'settings.audio.hint': 'Лепш асобная крыніца «Захоп гуку праграмы» са Spotify, каб waveline не рэагавала на голас. Спіс з’яўляецца пасля падключэння да OBS; паласа паказвае, якая крыніца зараз гучыць.',
+  'settings.audio.connectFirst': 'Спачатку падключыцеся да OBS (блок вышэй) — тут з’явіцца спіс крыніц гуку OBS.',
   'settings.audio.waiting': 'Чакаю ўзроўні гуку ад OBS…',
   'settings.rules': 'Правілы заказаў',
   'settings.rules.price': 'Цана, баллаў канала',

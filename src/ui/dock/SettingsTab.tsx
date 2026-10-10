@@ -135,6 +135,7 @@ export function SettingsTab({ controller }: { controller: DockController }) {
 function AudioSection({ controller }: { controller: DockController }) {
   const settings = useStore(controller.settings);
   const meters = useStore(controller.meters);
+  const obsStatus = useStore(controller.obsStatus).status;
   const names = Object.keys(meters);
   const selected = settings.audioSource;
   // Выбраная крыніца застаецца ў спісе, нават калі OBS пра яе зараз не паведамляе.
@@ -170,7 +171,9 @@ function AudioSection({ controller }: { controller: DockController }) {
           ))}
         </ul>
       ) : (
-        controller.obsStatus.get().status === 'connected' && <p class="muted small">{t('settings.audio.waiting')}</p>
+        <p class="small">
+          {obsStatus === 'connected' ? t('settings.audio.waiting') : t('settings.audio.connectFirst')}
+        </p>
       )}
       <p class="muted small">{t('settings.audio.hint')}</p>
     </section>
