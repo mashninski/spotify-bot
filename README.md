@@ -14,3 +14,16 @@
 - `docs/SETUP.md` — што трэба наладзіць аўтару.
 - `docs/CLAUDE_PROJECT_INSTRUCTIONS.md` — інструкцыя для Claude Project.
 - `.env.example` — спіс зменных асяроддзя (сакрэты ў `.env`, які не трапляе ў git).
+
+## Запуск (распрацоўка)
+
+Патрабуецца Node.js 24+.
+
+```bash
+npm install
+npm run dev      # http://127.0.0.1:5173/ — док і оверлей
+npm test         # тэсты
+npm run build    # зборка ў dist/
+```
+
+Як падключыць да OBS — `docs/SETUP.md`. Усе каманды — `docs/PROJECT.md`.
