@@ -172,18 +172,17 @@
 
 ## Бот без сервера: старонкі з інтэрнэту (Этап 5, ADR-019)
 
-Пасля гэтага `npm run dev` больш не патрэбны: OBS загружае док і оверлэй з `https://mashninski.github.io/spotify-bot-app/`.
+Пасля гэтага `npm run dev` больш не патрэбны: OBS загружае док і оверлэй з `https://mashninski.github.io/spotify-bot/`.
 
-### 1. Стварыць рэпазіторый для зборкі (адзін раз)
-1. github.com → **+** уверсе справа → **New repository**.
-2. **Repository name**: `spotify-bot-app`. **Public**. Нічога не дадаваць (без README, .gitignore, license) → **Create repository**.
-3. Напісаць Claude «рэпазіторый гатовы» — Claude выкладзе зборку ў галіну `gh-pages`.
-4. Пасля гэтага: рэпазіторый → **Settings → Pages** → *Build and deployment* → **Source: Deploy from a branch** → **Branch: gh-pages**, папка **/ (root)** → **Save**. Праз 1–2 хв адрас `https://mashninski.github.io/spotify-bot-app/` адкрываецца ў браўзеры (спіс старонак).
+### 1. Зрабіць рэпазіторый публічным і ўключыць Pages (адзін раз)
+1. github.com/mashninski/spotify-bot → **Settings** → унізе **Danger Zone** → **Change repository visibility** → **Change to public** → пацвердзіць (GitHub папросіць увесці назву рэпазіторыя).
+2. Напісаць Claude «публічны» — Claude выкладзе зборку ў галіну `gh-pages` (калі яшчэ не выклаў).
+3. Рэпазіторый → **Settings → Pages** → *Build and deployment* → **Source: Deploy from a branch** → **Branch: gh-pages**, папка **/ (root)** → **Save**. Праз 1–2 хв адрас `https://mashninski.github.io/spotify-bot/` адкрываецца ў браўзеры (спіс старонак).
 
 ### 2. Перавесці OBS на новы адрас
-1. Spotify Dashboard → ваша прыкладанне → **Settings → Edit** → у **Redirect URIs** дадаць `https://mashninski.github.io/spotify-bot-app/callback.html` → **Add** → **Save** (стары адрас можна пакінуць).
-2. OBS → **Док-панели → Пользовательские док-панели браузера…** → у радку «Spotify-бот» замяніць URL на `https://mashninski.github.io/spotify-bot-app/dock.html` → **Применить**.
-3. Крыніца оверлэя → **Свойства** → URL `https://mashninski.github.io/spotify-bot-app/overlay.html` → **ОК** (у кожнай сцэне, дзе ён ёсць; калі крыніца адна і тая ж — адзін раз).
+1. Spotify Dashboard → ваша прыкладанне → **Settings → Edit** → у **Redirect URIs** дадаць `https://mashninski.github.io/spotify-bot/callback.html` → **Add** → **Save** (стары адрас можна пакінуць).
+2. OBS → **Док-панели → Пользовательские док-панели браузера…** → у радку «Spotify-бот» замяніць URL на `https://mashninski.github.io/spotify-bot/dock.html` → **Применить**.
+3. Крыніца оверлэя → **Свойства** → URL `https://mashninski.github.io/spotify-bot/overlay.html` → **ОК** (у кожнай сцэне, дзе ён ёсць; калі крыніца адна і тая ж — адзін раз).
 4. У доку — нанова (новы адрас = новыя налады, адзін раз): «Налады» → пароль OBS → «Падключыцца»; Spotify — Client ID → «Падключыць Spotify»; Twitch — Client ID → «Падключыць Twitch»; «Правілы замоў», «Крыніца гуку». Узнагароду бот знойдзе сам.
 5. **Галоўная праверка:** «Стан» → OBS → «obs-websocket» паказвае версію, а хваля ў оверлэі рухаецца. Калі obs-websocket не падключаецца — паведаміць Claude (браўзер OBS можа не пускаць старонку з інтэрнэту да `127.0.0.1`).
 6. Закрыць тэрмінал з `npm run dev`, перазапусціць OBS — усё загружаецца само.

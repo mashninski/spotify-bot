@@ -28,6 +28,6 @@
     "vitest": "^5.0.3"
   },
   "deploy": {
-    "repo": "https://github.com/mashninski/spotify-bot-app.git"
+    "repo": "https://github.com/mashninski/spotify-bot.git"
   }
 }
