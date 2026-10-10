@@ -1,4 +1,4 @@
-// «Мозг» прыкладання (ADR-015): стан плэера і чаргі, заказы, падключэнне да OBS, адпраўка стану ў оверлей.
+// «Мозг» прыкладання (ADR-015): стан плэера і чаргі, заказы, Spotify (ADR-016), падключэнне да OBS, адпраўка стану ў оверлей.
 // Працуе толькі ў старонцы-лідары (док або оверлей). Стан піша ў агульныя сховішчы старонкі,
 // а старонка (node.ts) рассылае яго астатнім.
 
@@ -15,6 +15,10 @@ import { OverlaySender } from '../obs/channel';
 import { ObsClient } from '../obs/client';
 import { EventSubscription, type InputVolumeMetersEvent } from '../obs/protocol';
 import { createMockProvider, MOCK_REQUEST_TRACKS, MOCK_VIEWERS, type MusicProvider } from '../providers/spotify';
+import { createSpotifyApi } from '../providers/spotify/api';
+import { clearTokens, hasTokens, saveLoginResult, type FetchLike } from '../providers/spotify/auth';
+import { applyPlayback, canSave } from '../providers/spotify/map';
+import { createRequestCounter, createSpotifySync, initialSpotifyInfo, type SpotifyInfo } from '../providers/spotify/sync';
 import { createMockRequestSource, type SongRequest } from '../sources/twitch';
 import type { ChannelInfo, Command, Notice, ObsInfo } from './bus';
 import { loadPlayer, savePlayer } from './persist';
@@ -28,7 +32,7 @@ const SIMULATED_AUDIO_MS = 50;
 /** Як часта захоўваць стан плэера ў localStorage (і заўсёды — пры спыненні). */
 const PERSIST_MS = 1000;
 
-type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 /** Сховішчы старонкі, у якія мозг піша свой стан. */
 export interface BrainStores {
@@ -38,6 +42,7 @@ export interface BrainStores {
   channel: Store<ChannelInfo>;
   meters: Store<Record<string, number>>;
   notice: Store<Notice | null>;
+  spotify: Store<SpotifyInfo>;
 }
 
 export interface BrainOptions {
@@ -47,6 +52,13 @@ export interface BrainOptions {
   stores: BrainStores;
   updateSettings(update: (s: Settings) => Settings): void;
   provider?: MusicProvider;
+  /**
+   * Тэставы плэйліст, пакуль Spotify не падключаны (толькі для тэстаў). Па змаўчанні без Spotify нічога не грае,
+   * каб на стрыме не з'явіліся выдуманыя песні (ADR-016).
+   */
+  demo?: boolean;
+  /** Падмена `fetch` для запытаў да Spotify (тэсты). */
+  fetch?: FetchLike;
   /** Выклікаецца на кожную падзею ад OBS (дыягностыка схаванага дока). */
   onObsEvent?: () => void;
 }
@@ -68,9 +80,65 @@ export function createBrain(options: BrainOptions) {
   let lastPersistAt = 0;
   let refilling = false;
   let running = false;
+  /** Песні мяняе Spotify (ёсць токены), а не ўнутраны таймер. */
+  let spotifyMode = false;
   /** Стан ужо загружаны або створаны — толькі тады яго можна захоўваць (інакш перазапішам чаргу пустой). */
   let loaded = false;
   const stopFns: (() => void)[] = [];
+
+  // --- Spotify (ADR-016) ---
+
+  const counter = createRequestCounter(storage);
+  const api = createSpotifyApi({
+    storage,
+    fetch: options.fetch,
+    onRequest: () => {
+      const n = counter.add();
+      stores.spotify.set((s) => ({ ...s, requestsToday: n }));
+    },
+  });
+  const spotify = createSpotifySync({
+    api,
+    onPlayback: (playback, queue) => {
+      if (spotifyMode) player.set((s) => applyPlayback(s, playback, queue));
+    },
+    onInfo: (patch) => stores.spotify.set((s) => ({ ...s, ...patch })),
+    onNotice: (n, kind) => showNotice(t(`spotify.notice.${n}`), kind),
+    onLoggedOut: () => {
+      // Уваход састарэў (6 месяцаў) або Spotify яго адклікаў — док папросіць падключыцца зноў.
+      clearTokens(storage);
+      saveLoginResult(storage, { ok: false, error: 'expired', at: Date.now() });
+      leaveSpotify();
+    },
+  });
+
+  function enterSpotify(): void {
+    spotifyMode = true;
+    // Тэставыя трэкі (без Spotify URI) у Spotify не адправіш — прыбіраем іх.
+    player.set((s) => ({
+      ...s,
+      current: s.current?.track.uri ? s.current : null,
+      isPlaying: Boolean(s.current?.track.uri) && s.isPlaying,
+      requests: s.requests.filter((r) => r.track.uri),
+      context: s.context.filter((c) => c.track.uri),
+      history: [],
+    }));
+    spotify.start();
+  }
+
+  function leaveSpotify(): void {
+    spotifyMode = false;
+    spotify.stop();
+    stores.spotify.set({ ...initialSpotifyInfo('off'), requestsToday: counter.get() });
+    player.set((s) => ({ ...s, current: null, isPlaying: false, progressMs: 0, context: [], history: [] }));
+  }
+
+  /** Токены з'явіліся (уваход на старонцы вяртання) або зніклі — пераключаем рэжым. */
+  function checkSpotify(): void {
+    const connected = hasTokens(storage);
+    if (connected && !spotifyMode) enterSpotify();
+    else if (!connected && spotifyMode) leaveSpotify();
+  }
 
   // Ключ запісу павінен быць унікальны і пасля змены лідара, таму ў ім ідэнтыфікатар старонкі.
   const makeItem = (track: Track, requestedBy?: string): QueueItem => ({
@@ -116,7 +184,7 @@ export function createBrain(options: BrainOptions) {
     refilling = true;
     try {
       const tracks = await provider.nextContextTracks(CONTEXT_MIN - player.get().context.length);
-      if (running) player.set((s) => q.appendContext(s, tracks.map((tr) => makeItem(tr))));
+      if (running && !spotifyMode) player.set((s) => q.appendContext(s, tracks.map((tr) => makeItem(tr))));
     } finally {
       refilling = false;
     }
@@ -126,10 +194,16 @@ export function createBrain(options: BrainOptions) {
     const now = Date.now();
     const delta = now - lastTickAt;
     lastTickAt = now;
-    player.set((s) => q.tick(s, delta));
-    if (player.get().context.length < CONTEXT_MIN) void refillContext();
+    if (spotifyMode) {
+      player.set((s) => q.advanceProgress(s, delta));
+      spotify.tick(now);
+    } else {
+      player.set((s) => q.tick(s, delta));
+      if (options.demo && player.get().context.length < CONTEXT_MIN) void refillContext();
+    }
     if (now - lastHeartbeatAt >= HEARTBEAT_MS) {
       lastHeartbeatAt = now;
+      checkSpotify();
       sendState(true);
       send({ type: 'ping', at: now });
       updateChannel();
@@ -222,17 +296,40 @@ export function createBrain(options: BrainOptions) {
   function execute(command: Command): void {
     if (!running) return;
     switch (command.type) {
-      case 'toggle-play':
-        return player.set(q.togglePlay);
+      case 'toggle-play': {
+        if (!spotifyMode) return player.set(q.togglePlay);
+        // Адразу паказваем паўзу/працяг, а калі Spotify не паслухаўся — вяртаем як было.
+        const wasPlaying = player.get().isPlaying;
+        player.set(q.togglePlay);
+        void spotify.command(wasPlaying ? 'pause' : 'play').then((ok) => {
+          if (!ok && running) player.set((s) => ({ ...s, isPlaying: wasPlaying }));
+        });
+        return;
+      }
       case 'next':
+        if (spotifyMode) return void spotify.command('next');
         return player.set(q.skipNext);
       case 'previous':
+        if (spotifyMode) return void spotify.command('previous');
         return player.set(q.skipPrevious);
       case 'play-now':
+        // Заказы ў Spotify — Этап 3б (ADR-007).
+        if (spotifyMode) return;
         return player.set((s) => q.playNow(s, command.key));
       case 'remove':
         return player.set((s) => q.removeRequest(s, command.key));
+      case 'save-current': {
+        const track = player.get().current?.track;
+        if (spotifyMode && track?.uri && canSave(track)) void spotify.save(track.uri);
+        return;
+      }
+      case 'spotify-disconnect':
+        clearTokens(storage);
+        if (spotifyMode) leaveSpotify();
+        return;
       case 'test-request': {
+        // Выдуманыя трэкі нельга адправіць у Spotify (ADR-016).
+        if (spotifyMode) return;
         const track = MOCK_REQUEST_TRACKS[Math.floor(Math.random() * MOCK_REQUEST_TRACKS.length)];
         const user = MOCK_VIEWERS[Math.floor(Math.random() * MOCK_VIEWERS.length)];
         return requestSource.simulate({ user, query: `${track.artist} ${track.title}` });
@@ -254,9 +351,11 @@ export function createBrain(options: BrainOptions) {
       // Стан папярэдняга лідара (або з мінулага запуску OBS); калі яго няма — тэставыя даныя.
       const saved = loadPlayer(storage);
       if (saved) player.set(saved);
-      else await seedDemo();
+      else if (options.demo) await seedDemo();
       if (!running) return;
       loaded = true;
+      stores.spotify.set((s) => ({ ...s, requestsToday: counter.get() }));
+      checkSpotify();
       persist();
       requestSource.start(handleRequest);
       stopFns.push(player.subscribe(() => sendState()));
@@ -285,6 +384,7 @@ export function createBrain(options: BrainOptions) {
     stop() {
       if (!running) return;
       running = false;
+      spotify.stop();
       for (const f of stopFns.splice(0)) f();
       requestSource.stop();
       persist();

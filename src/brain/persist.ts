@@ -37,7 +37,9 @@ export function loadPlayer(storage: StorageLike | null, now = Date.now()): Playe
   if (!isObject(raw) || typeof raw.savedAt !== 'number') return null;
   const state = parseState(raw.state);
   if (!state) return null;
-  return q.tick(state, Math.max(0, now - raw.savedAt));
+  // Песні са Spotify мяняе сам Spotify (ADR-016) — толькі прасоўваем час, наступную скажа апытанне.
+  const advance = state.current?.track.uri ? q.advanceProgress : q.tick;
+  return advance(state, Math.max(0, now - raw.savedAt));
 }
 
 const isObject = (x: unknown): x is Record<string, any> => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -47,7 +49,9 @@ function parseTrack(raw: unknown): Track | null {
   const { id, title, artist, durationMs, explicit } = raw;
   if (typeof id !== 'string' || typeof title !== 'string' || typeof artist !== 'string') return null;
   if (typeof durationMs !== 'number' || !(durationMs > 0) || typeof explicit !== 'boolean') return null;
-  return { id, title, artist, durationMs, explicit };
+  return typeof raw.uri === 'string' && raw.uri
+    ? { id, title, artist, durationMs, explicit, uri: raw.uri }
+    : { id, title, artist, durationMs, explicit };
 }
 
 function parseItem(raw: unknown): QueueItem | null {

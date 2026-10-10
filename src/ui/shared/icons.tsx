@@ -71,3 +71,23 @@ export function UserIcon({ size = 10 }: IconProps) {
     </svg>
   );
 }
+
+/** «+» у крузе: дадаць у «Любімыя трэкі» (як у Spotify). */
+export function PlusCircleIcon({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" />
+      <path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    </svg>
+  );
+}
+
+/** Зялёная галачка ў крузе: песня ўжо ў «Любімых трэках». */
+export function CheckCircleIcon({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="#1ed760" />
+      <path d="M7.5 12.3l3 3 6-6.3" fill="none" stroke="#121212" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  );
+}

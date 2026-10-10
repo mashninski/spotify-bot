@@ -15,6 +15,7 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
   const obs = useStore(controller.obs);
   const leader = useStore(controller.leader);
   const conflicts = useStore(controller.conflicts);
+  const spotify = useStore(controller.spotify);
   const env = obsBrowserInfo();
   const redirect = readJson<RedirectResult>(safeLocalStorage(), REDIRECT_RESULT_KEY);
 
@@ -29,6 +30,10 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
           {controller.locksSupported ? t('diag.brain.locks') : t('diag.brain.noLocks')}
         </p>
         {conflicts > 0 && <p class="small bad">{t('diag.brain.conflicts', { n: conflicts })}</p>}
+      </Section>
+
+      <Section title={t('diag.spotify')} help={t('diag.spotify.help')}>
+        <p class="small">{t('diag.spotify.requests', { n: spotify.requestsToday })}</p>
       </Section>
 
       <Section title={t('diag.env')} help={t('diag.env.help')}>

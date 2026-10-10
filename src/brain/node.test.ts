@@ -11,7 +11,11 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function memoryStorage() {
   const data = new Map<string, string>();
-  return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  return {
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => void data.set(k, v),
+    removeItem: (k: string) => void data.delete(k),
+  };
 }
 
 let counter = 0;
@@ -21,7 +25,7 @@ function setup() {
   const name = `test-brain-${++counter}-${Date.now()}`;
   const storage = memoryStorage();
   const make = (page: PageKind, locks: LockManagerLike | null = navigator.locks as unknown as LockManagerLike) => {
-    const node = createBrainNode({ page, storage, locks, lockName: name, busName: name });
+    const node = createBrainNode({ page, storage, locks, lockName: name, busName: name, demo: true });
     nodes.push(node);
     node.start();
     return node;

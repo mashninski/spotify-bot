@@ -1,18 +1,20 @@
-// Укладка «Налады»: OBS, крыніца гуку, адрас оверлея, правілы заказаў, падключэнні.
+// Укладка «Налады»: Spotify, OBS, крыніца гуку, адрас оверлея, правілы заказаў, Twitch.
 
 import { useState } from 'preact/hooks';
 import type { RequestRules } from '../../core/rules';
-import { SIMULATED_AUDIO } from '../../core/settings';
-import { t } from '../../i18n';
+import { safeLocalStorage, SIMULATED_AUDIO } from '../../core/settings';
+import { t, type MessageKey } from '../../i18n';
+import { readLoginResult } from '../../providers/spotify/auth';
+import type { SpotifyInfo } from '../../providers/spotify/sync';
 import { useStore } from '../shared/hooks';
-import type { DockController } from './controller';
+import { clock } from '../shared/leader';
+import { isClientId, type DockController } from './controller';
 import { Section } from './Section';
 
 export function SettingsTab({ controller }: { controller: DockController }) {
   const settings = useStore(controller.settings);
   const obs = useStore(controller.obs);
   const mode = useStore(controller.channel).mode;
-  const [copied, setCopied] = useState(false);
 
   const connected = obs.status === 'connected' || obs.status === 'connecting' || obs.status === 'error';
 
@@ -26,18 +28,10 @@ export function SettingsTab({ controller }: { controller: DockController }) {
     overlayUrl.hash = new URLSearchParams({ obs: settings.obs.url, pw: settings.obs.password }).toString();
   }
 
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Калі буфер абмену недаступны, адрас можна выдзеліць у полі і скапіяваць Ctrl+C.
-    }
-  };
-
   return (
     <div class="settings">
+      <SpotifySection controller={controller} />
+
       <Section title={t('settings.obs')} help={t('settings.obs.help')}>
         <label class="field">
           <span>{t('settings.obs.url')}</span>
@@ -69,12 +63,7 @@ export function SettingsTab({ controller }: { controller: DockController }) {
       <AudioSection controller={controller} />
 
       <Section title={t('settings.overlay')} help={t('settings.overlay.help')}>
-        <div class="copy-row">
-          <input readOnly value={overlayUrl.toString()} onFocus={(e) => e.currentTarget.select()} />
-          <button class="btn" onClick={() => copy(overlayUrl.toString())}>
-            {copied ? t('settings.overlay.copied') : t('settings.overlay.copy')}
-          </button>
-        </div>
+        <CopyRow value={overlayUrl.toString()} />
       </Section>
 
       <Section title={t('settings.rules')} help={t('settings.rules.help')}>
@@ -99,13 +88,10 @@ export function SettingsTab({ controller }: { controller: DockController }) {
         </label>
       </Section>
 
-      <Section title={t('settings.accounts')} help={t('settings.accounts.help')}>
+      <Section title={t('settings.twitch')} help={t('settings.twitch.help')}>
         <div class="row-actions">
           <button class="btn" disabled>
-            {t('settings.accounts.spotify')}
-          </button>
-          <button class="btn" disabled>
-            {t('settings.accounts.twitch')}
+            {t('settings.twitch.connect')}
           </button>
         </div>
       </Section>
@@ -175,5 +161,106 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
         }}
       />
     </label>
+  );
+}
+
+/** Падключэнне Spotify (ADR-016): Client ID, адрас вяртання, уваход, стан. */
+function SpotifySection({ controller }: { controller: DockController }) {
+  const clientId = useStore(controller.settings).spotify.clientId;
+  const info = useStore(controller.spotify);
+  const connected = info.status !== 'off';
+  const login = connected ? null : readLoginResult(safeLocalStorage());
+
+  return (
+    <Section title={t('settings.spotify')} help={t('settings.spotify.help')}>
+      {connected ? (
+        <>
+          <p class={`small ${info.status === 'ok' ? 'good' : info.status === 'connecting' ? '' : 'bad'}`}>{spotifyStatusText(info)}</p>
+          {info.status === 'ok' && (
+            <p class={`small ${info.problem ? 'bad' : 'muted'}`}>
+              {info.problem
+                ? t(`settings.spotify.problem.${info.problem}`)
+                : info.device
+                  ? t('settings.spotify.device', { device: info.device })
+                  : t('settings.spotify.noDevice')}
+            </p>
+          )}
+          <div class="row-actions">
+            <button class="btn" onClick={controller.disconnectSpotify}>
+              {t('settings.spotify.disconnect')}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <label class="field">
+            <span>{t('settings.spotify.clientId')}</span>
+            <input
+              value={clientId}
+              spellcheck={false}
+              autocomplete="off"
+              onInput={(e) => {
+                const value = e.currentTarget.value.trim();
+                controller.updateSettings((s) => ({ ...s, spotify: { ...s.spotify, clientId: value } }));
+              }}
+            />
+          </label>
+          {clientId && !isClientId(clientId) && <p class="small bad">{t('settings.spotify.badClientId')}</p>}
+          <div class="field">
+            <span>{t('settings.spotify.redirect')}</span>
+            <CopyRow value={controller.spotifyRedirectUri} />
+          </div>
+          <div class="row-actions">
+            <button class="btn primary" disabled={!isClientId(clientId)} onClick={() => void controller.connectSpotify()}>
+              {t('settings.spotify.connect')}
+            </button>
+          </div>
+          {login && !login.ok && <p class="small bad">{loginErrorText(login.error ?? '')}</p>}
+        </>
+      )}
+    </Section>
+  );
+}
+
+function spotifyStatusText(info: SpotifyInfo): string {
+  switch (info.status) {
+    case 'connecting':
+      return t('settings.spotify.connecting');
+    case 'limited':
+      return t('settings.spotify.limited', { time: clock(info.limitedUntil) });
+    case 'error':
+      return t(`settings.spotify.problem.${info.problem || 'other'}`);
+    default:
+      return info.user ? t('settings.spotify.connected', { user: info.user }) : t('settings.spotify.connectedNoName');
+  }
+}
+
+const LOGIN_ERRORS = ['expired', 'access_denied', 'invalid_client', 'state'] as const;
+
+function loginErrorText(code: string): string {
+  return (LOGIN_ERRORS as readonly string[]).includes(code)
+    ? t(`settings.spotify.error.${code}` as MessageKey)
+    : t('settings.spotify.error.other', { code });
+}
+
+/** Поле толькі для чытання з кнопкай «Капіяваць». */
+function CopyRow({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Калі буфер абмену недаступны, адрас можна выдзеліць у полі і скапіяваць Ctrl+C.
+    }
+  };
+  return (
+    <div class="copy-row">
+      <input readOnly value={value} onFocus={(e) => e.currentTarget.select()} />
+      <button class="btn" onClick={copy}>
+        {copied ? t('settings.overlay.copied') : t('settings.overlay.copy')}
+      </button>
+    </div>
   );
 }

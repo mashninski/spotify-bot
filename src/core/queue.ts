@@ -96,6 +96,16 @@ export function appendContext(state: PlayerState, items: QueueItem[]): PlayerSta
   return { ...state, context: [...state.context, ...items] };
 }
 
+/**
+ * Ход часу, калі песні мяняе сам Spotify (ADR-016): толькі прасоўвае час паміж апытаннямі
+ * і спыняецца ў канцы песні — наступную песню скажа Spotify.
+ */
+export function advanceProgress(state: PlayerState, deltaMs: number): PlayerState {
+  if (!state.isPlaying || !state.current || deltaMs <= 0) return state;
+  const progressMs = Math.min(state.progressMs + deltaMs, state.current.track.durationMs);
+  return progressMs === state.progressMs ? state : { ...state, progressMs };
+}
+
 /** Ход часу: прасоўвае песню, а калі яна скончылася — пераходзіць да наступнай. */
 export function tick(state: PlayerState, deltaMs: number): PlayerState {
   if (!state.isPlaying || !state.current || deltaMs <= 0) return state;

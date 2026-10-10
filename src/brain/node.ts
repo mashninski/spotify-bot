@@ -21,6 +21,8 @@ import {
 } from './bus';
 import { electLeader, getLockManager, type LeaderElection, type LockManagerLike } from './leader';
 import { loadPlayer } from './persist';
+import { hasTokens, type FetchLike } from '../providers/spotify/auth';
+import { initialSpotifyInfo, type SpotifyInfo } from '../providers/spotify/sync';
 
 /** Затрымка рассылкі стану пасля змены: некалькі змен запар ідуць адным паведамленнем. */
 const SNAPSHOT_DELAY_MS = 50;
@@ -29,7 +31,7 @@ const SNAPSHOT_HEARTBEAT_MS = 1000;
 /** Калі ад лідара так доўга нічога няма — лічым, што яго няма. */
 const LEADER_TIMEOUT_MS = 3500;
 
-type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export interface BrainNodeOptions {
   page: PageKind;
@@ -41,6 +43,9 @@ export interface BrainNodeOptions {
   lockName?: string;
   busName?: string;
   onObsEvent?: () => void;
+  /** Тэставы плэйліст без Spotify (толькі тэсты, гл. BrainOptions.demo). */
+  demo?: boolean;
+  fetch?: FetchLike;
 }
 
 export function createBrainNode(options: BrainNodeOptions) {
@@ -57,6 +62,8 @@ export function createBrainNode(options: BrainNodeOptions) {
   /** Узровень гуку кожнай крыніцы OBS (для выбару крыніцы ў наладах). */
   const meters = createStore<Record<string, number>>({});
   const notice = createStore<Notice | null>(null);
+  /** Стан падключэння да Spotify (ADR-016). Да першага паведамлення ад лідара — па наяўнасці токенаў. */
+  const spotify = createStore<SpotifyInfo>(initialSpotifyInfo(hasTokens(storage) ? 'connecting' : 'off'));
   /** Хто зараз лідар (`null` — невядома або нікога няма). */
   const leader = createStore<LeaderInfo | null>(null);
   /** Колькі разоў заўважаны іншы лідар, калі лідар — гэтая старонка (не павінна быць ніколі). */
@@ -70,7 +77,7 @@ export function createBrainNode(options: BrainNodeOptions) {
   const leaderStopFns: (() => void)[] = [];
 
   function snapshot(info: LeaderInfo): BrainSnapshot {
-    return { leader: info, player: { ...player.get(), history: [] }, obs: obs.get(), channel: channel.get() };
+    return { leader: info, player: { ...player.get(), history: [] }, obs: obs.get(), channel: channel.get(), spotify: spotify.get() };
   }
 
   function postSnapshot(): void {
@@ -97,12 +104,21 @@ export function createBrainNode(options: BrainNodeOptions) {
   function becomeLeader(): void {
     if (brain) return;
     leader.set({ id, page: options.page, since: Date.now(), locks: locks !== null });
-    brain = createBrain({ id, storage, stores: { settings, player, obs, channel, meters, notice }, updateSettings, onObsEvent: options.onObsEvent });
+    brain = createBrain({
+      id,
+      storage,
+      stores: { settings, player, obs, channel, meters, notice, spotify },
+      updateSettings,
+      onObsEvent: options.onObsEvent,
+      demo: options.demo,
+      fetch: options.fetch,
+    });
     const heartbeat = setInterval(postSnapshot, SNAPSHOT_HEARTBEAT_MS);
     leaderStopFns.push(
       player.subscribe(scheduleSnapshot),
       obs.subscribe(scheduleSnapshot),
       channel.subscribe(scheduleSnapshot),
+      spotify.subscribe(scheduleSnapshot),
       meters.subscribe((m) => bus.post({ kind: 'meters', meters: m })),
       notice.subscribe((n) => n && bus.post({ kind: 'notice', notice: n })),
       () => clearInterval(heartbeat),
@@ -117,6 +133,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     player.set(s.player);
     obs.set(s.obs);
     channel.set(s.channel);
+    if (s.spotify) spotify.set(s.spotify);
   }
 
   function command(c: Command): void {
@@ -134,6 +151,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     channel,
     meters,
     notice,
+    spotify,
     leader,
     conflicts,
 
@@ -202,6 +220,8 @@ export function createBrainNode(options: BrainNodeOptions) {
     addTestRequest: () => command({ type: 'test-request' }),
     connectObs: () => command({ type: 'obs-connect' }),
     disconnectObs: () => command({ type: 'obs-disconnect' }),
+    saveCurrent: () => command({ type: 'save-current' }),
+    disconnectSpotify: () => command({ type: 'spotify-disconnect' }),
   };
 }
 

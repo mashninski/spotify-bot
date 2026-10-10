@@ -4,6 +4,7 @@
 import type { PlayerState } from '../core/types';
 import type { ObsChannelMode } from '../obs/channel';
 import type { ObsStatus } from '../obs/client';
+import type { SpotifyInfo } from '../providers/spotify/sync';
 
 export const BUS_NAME = 'spotify-bot:brain';
 export const BUS_VERSION = 1;
@@ -48,7 +49,10 @@ export type Command =
   | { type: 'remove'; key: string }
   | { type: 'test-request' }
   | { type: 'obs-connect' }
-  | { type: 'obs-disconnect' };
+  | { type: 'obs-disconnect' }
+  /** «+»: дадаць бягучую песню ў «Любімыя трэкі» Spotify. */
+  | { type: 'save-current' }
+  | { type: 'spotify-disconnect' };
 
 /** Усё, што лідар паказвае іншым старонкам. Гісторыя песень не перадаецца — яна патрэбна толькі лідару. */
 export interface BrainSnapshot {
@@ -56,6 +60,7 @@ export interface BrainSnapshot {
   player: PlayerState;
   obs: ObsInfo;
   channel: ChannelInfo;
+  spotify: SpotifyInfo;
 }
 
 export type BusMessage =
@@ -79,7 +84,16 @@ export interface BusEnvelope {
 
 const isObject = (x: unknown): x is Record<string, any> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
-const SIMPLE_COMMANDS = new Set(['toggle-play', 'next', 'previous', 'test-request', 'obs-connect', 'obs-disconnect']);
+const SIMPLE_COMMANDS = new Set([
+  'toggle-play',
+  'next',
+  'previous',
+  'test-request',
+  'obs-connect',
+  'obs-disconnect',
+  'save-current',
+  'spotify-disconnect',
+]);
 
 export function parseCommand(raw: unknown): Command | null {
   if (!isObject(raw) || typeof raw.type !== 'string') return null;

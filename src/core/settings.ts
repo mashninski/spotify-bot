@@ -15,6 +15,10 @@ export interface Settings {
   /** Назва крыніцы OBS, па якой рэагуе waveline; пуста — не выбрана. */
   audioSource: string;
   rules: RequestRules;
+  spotify: {
+    /** Client ID прыкладання, якое стрымер стварыў у Spotify Dashboard (ADR-008, ADR-016). Не сакрэт. */
+    clientId: string;
+  };
 }
 
 export const SETTINGS_KEY = 'spotify-bot:settings:v1';
@@ -24,6 +28,7 @@ export function defaultSettings(): Settings {
     obs: { url: 'ws://127.0.0.1:4455', password: '', autoConnect: false },
     audioSource: '',
     rules: { ...DEFAULT_RULES },
+    spotify: { clientId: '' },
   };
 }
 
@@ -45,6 +50,7 @@ export function loadSettings(storage: StorageLike | null): Settings {
   const r = raw as Record<string, any>;
   const obs = typeof r.obs === 'object' && r.obs ? r.obs : {};
   const rules = typeof r.rules === 'object' && r.rules ? r.rules : {};
+  const spotify = typeof r.spotify === 'object' && r.spotify ? r.spotify : {};
   return {
     obs: {
       url: pick(obs.url, d.obs.url) || d.obs.url,
@@ -57,6 +63,9 @@ export function loadSettings(storage: StorageLike | null): Settings {
       maxDurationMin: positiveInt(rules.maxDurationMin, d.rules.maxDurationMin),
       maxPerUser: positiveInt(rules.maxPerUser, d.rules.maxPerUser),
       allowExplicit: pick(rules.allowExplicit, d.rules.allowExplicit),
+    },
+    spotify: {
+      clientId: pick(spotify.clientId, d.spotify.clientId).trim(),
     },
   };
 }

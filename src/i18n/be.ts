@@ -20,19 +20,25 @@ export const be = {
 
   'player.now': 'Зараз грае',
   'player.now.help':
-    'Песня, якая гучыць зараз, і колькі яе ўжо прайграна. Кнопкі пад ёй кіруюць плэерам: вярнуцца да папярэдняй песні, паставіць на паўзу або працягнуць, перайсці да наступнай. Гледачы бачаць тую ж песню ў оверлеі на стрыме',
+    'Песня, якая зараз грае ў вашым Spotify, і колькі яе ўжо прайграна. Кнопкі пад ёй кіруюць Spotify: вярнуцца да папярэдняй песні, паставіць на паўзу або працягнуць, перайсці да наступнай. Калі пераключыць песню ў самім Spotify, док і оверлей пакажуць гэта праз некалькі секунд. Кнопка «+» побач з назвай дадае песню ў вашы «Любімыя трэкі» Spotify, а зялёная галачка значыць, што песня ўжо там. Гледачы бачаць тую ж песню ў оверлеі на стрыме',
   'player.nothing': 'Нічога не грае',
+  'player.spotifyOff': 'Spotify не падключаны',
+  'player.spotifyConnect': 'Падключыць',
+  'player.spotifyIdle': 'Уключыце музыку ў Spotify',
+  'player.save': 'Дадаць у «Любімыя трэкі»',
+  'player.saved': 'Ужо ў «Любімых трэках»',
   'player.previous': 'Папярэдняя',
   'player.pause': 'Паўза',
   'player.play': 'Працягнуць',
   'player.next': 'Наступная',
   'player.requests': 'Заказы гледачоў',
   'player.requests.help':
-    'Песні, якія гледачы заказалі за баллы канала. Яны граюць па чарзе і раней за ваш плэйліст. Кнопка ▶ адразу ўключае песню, а астатнія заказы застаюцца ў тым жа парадку. Кнопка ✕ прыбірае песню з чаргі. «+ Тэставы заказ» дадае выпадковы заказ ад выдуманага гледача — каб паглядзець, як усё выглядае',
+    'Песні, якія гледачы заказалі за баллы канала. Яны граюць па чарзе і раней за ваш плэйліст. Кнопка ▶ адразу ўключае песню, а астатнія заказы застаюцца ў тым жа парадку. Кнопка ✕ прыбірае песню з чаргі. Пакуль Spotify не падключаны, кнопка «+ Тэставы заказ» дадае выпадковы заказ ад выдуманага гледача — каб паглядзець, як усё выглядае',
   'player.requests.empty': 'Заказаў пакуль няма',
-  'player.context': 'Далей з плэйліста',
+  'player.context': 'Далей у Spotify',
   'player.context.help':
-    'Калі заказы скончацца, будуць граць гэтыя песні — з плэйліста або альбома, які вы ўключылі ў Spotify. Парадак гэтых песень змяняецца ў самім Spotify',
+    'Песні, якія Spotify сыграе наступнымі: ваша чарга ў Spotify, а потым плэйліст або альбом, які вы ўключылі. Калі ёсць заказы гледачоў, яны граюць раней. Парадак гэтых песень змяняецца ў самім Spotify',
+  'player.context.empty': 'Spotify пакуль не паказаў наступных песень',
   'player.playNow': 'Прайграць зараз',
   'player.remove': 'Выдаліць',
   'player.addTestRequest': '+ Тэставы заказ',
@@ -42,6 +48,35 @@ export const be = {
   'player.rejected.explicit': '{user}: «{title}» — explicit забаронены',
   'player.rejected.user-limit': '{user}: ужо {max} песні ў чарзе',
   'player.rejected.duplicate': '{user}: «{title}» ужо ў чарзе',
+
+  'settings.spotify': 'Spotify',
+  'settings.spotify.help':
+    'Док паказвае, што грае ў вашым Spotify, і кіруе ім. Для гэтага патрэбна ваша ўласнае бясплатнае прыкладанне Spotify (патрэбны Spotify Premium). Адкрыйце developer.spotify.com/dashboard у браўзеры, увайдзіце і націсніце «Create app». Упішыце любую назву і апісанне, у поле «Redirect URIs» устаўце адрас вяртання з гэтага блока і націсніце «Add», адзначце «Web API», пагадзіцеся з умовамі і націсніце «Save». Потым скапіруйце «Client ID» са старонкі прыкладання ў поле ніжэй і націсніце «Падключыць Spotify»: у доку адкрыецца ўваход у Spotify, а пасля ён вернецца сюды. Уваход дзейнічае 6 месяцаў, потым док папросіць падключыцца зноў',
+  'settings.spotify.clientId': 'Client ID',
+  'settings.spotify.redirect': 'Адрас вяртання (Redirect URI)',
+  'settings.spotify.connect': 'Падключыць Spotify',
+  'settings.spotify.disconnect': 'Адключыць',
+  'settings.spotify.off': 'Spotify не падключаны',
+  'settings.spotify.connecting': 'Падключэнне да Spotify…',
+  'settings.spotify.connected': 'Падключаны акаўнт {user}',
+  'settings.spotify.connectedNoName': 'Spotify падключаны',
+  'settings.spotify.device': 'Грае на прыладзе «{device}»',
+  'settings.spotify.noDevice': 'Spotify зараз нідзе не адкрыты',
+  'settings.spotify.limited': 'Spotify часова абмежаваў запыты, бот працягне ў {time}',
+  'settings.spotify.badClientId': 'Client ID — гэта 32 сімвалы: лічбы і літары a–f',
+  'settings.spotify.problem.not-allowed':
+    'Spotify не дае доступу. Праверце, што ў вас Spotify Premium і што ваш акаўнт дададзены ў раздзел «User Management» прыкладання на developer.spotify.com',
+  'settings.spotify.problem.network': 'Няма сувязі са Spotify, спрабую зноў…',
+  'settings.spotify.problem.other': 'Spotify адказаў памылкай, спрабую зноў…',
+  'settings.spotify.error.expired': 'Уваход у Spotify састарэў, падключыце Spotify зноў',
+  'settings.spotify.error.access_denied': 'Вы не дазволілі доступ у Spotify',
+  'settings.spotify.error.invalid_client': 'Spotify не прыняў Client ID, праверце яго',
+  'settings.spotify.error.state': 'Уваход не завяршыўся, паспрабуйце яшчэ раз',
+  'settings.spotify.error.other': 'Не атрымалася падключыць Spotify ({code})',
+  'spotify.notice.no-device': 'Spotify нідзе не адкрыты: уключыце музыку ў Spotify',
+  'spotify.notice.failed': 'Spotify не выканаў каманду, паспрабуйце яшчэ раз',
+  'spotify.notice.saved': 'Дададзена ў «Любімыя трэкі»',
+  'spotify.notice.limited': 'Spotify часова абмежаваў запыты, паспрабуйце пазней',
 
   'settings.obs': 'Падключэнне да OBS',
   'settings.obs.help':
@@ -73,11 +108,10 @@ export const be = {
   'settings.rules.maxDuration': 'Максімальная даўжыня, хвілін',
   'settings.rules.maxPerUser': 'Песень аднаго гледача ў чарзе',
   'settings.rules.allowExplicit': 'Дазволіць explicit',
-  'settings.accounts': 'Падключэнні',
-  'settings.accounts.help':
-    'Spotify патрэбны, каб док бачыў, што грае, і мог кіраваць музыкай. Twitch — каб прымаць заказы песень за баллы канала і адказваць гледачам у чаце ад вашага імя. Кнопкі запрацуюць у наступных версіях',
-  'settings.accounts.spotify': 'Падключыць Spotify',
-  'settings.accounts.twitch': 'Падключыць Twitch',
+  'settings.twitch': 'Twitch',
+  'settings.twitch.help':
+    'Twitch патрэбны, каб прымаць заказы песень за баллы канала і адказваць гледачам у чаце ад вашага імя. Падключэнне Twitch з’явіцца ў наступнай версіі прыкладання',
+  'settings.twitch.connect': 'Падключыць Twitch',
 
   'diag.brain': 'Дзе працуе бот',
   'diag.brain.help':
@@ -92,6 +126,11 @@ export const be = {
   'brain.in.dock': 'Бот працуе ў доку',
   'brain.in.overlay': 'Бот працуе ў оверлеі',
   'brain.in.otherOverlay': 'Бот працуе ў іншым оверлеі',
+
+  'diag.spotify': 'Spotify',
+  'diag.spotify.help':
+    'Spotify абмяжоўвае, колькі разоў у дзень асабістае прыкладанне можа ў яго пытацца. Таму бот пытаецца не часцей, чым трэба: раз у 6 секунд, калі грае музыка, адразу пасля канца песні і пасля націску кнопак, і радзей, калі музыка на паўзе. Тут відаць, колькі запытаў бот ужо зрабіў сёння',
+  'diag.spotify.requests': 'Запытаў да Spotify сёння: {n}',
 
   'diag.env': 'Асяроддзе',
   'diag.env.help': 'Дзе адкрыты док і якім спосабам бот перадае даныя оверлею',
@@ -129,6 +168,7 @@ export const be = {
   'callback.redirect': 'Вяртаю ў док…',
   'callback.popup': 'Гэта акно адкрыта з дока. Яго можна закрыць',
   'callback.unknown': 'Тут нічога рабіць не трэба',
+  'callback.spotify': 'Падключаю Spotify…',
 
   'overlay.debug.waiting': 'Чакаю даныя ад бота…',
   'overlay.debug.channel': 'канал: {channel}',

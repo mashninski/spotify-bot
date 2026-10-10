@@ -24,6 +24,7 @@ describe('налады', () => {
     s.obs.password = 'x';
     s.audioSource = 'Spotify';
     s.rules.maxPerUser = 3;
+    s.spotify.clientId = 'abc123';
     expect(saveSettings(storage, s)).toBe(true);
     expect(loadSettings(storage)).toEqual(s);
   });
@@ -34,6 +35,12 @@ describe('налады', () => {
     expect(partial.rules.price).toBe(1000);
     expect(partial.rules.maxPerUser).toBe(4);
     expect(partial.obs.url).toBe('ws://127.0.0.1:4455');
+    expect(partial.spotify.clientId).toBe('');
+  });
+
+  it('Client ID Spotify чытаецца без прабелаў па краях', () => {
+    const s = loadSettings(memoryStorage({ [SETTINGS_KEY]: JSON.stringify({ spotify: { clientId: '  abc  ' } }) }));
+    expect(s.spotify.clientId).toBe('abc');
   });
 
   it('памылка запісу не кідае выключэнне', () => {

@@ -58,4 +58,15 @@ describe('захаванне чаргі', () => {
     expect(savePlayer(null, sample(true))).toBe(false);
     expect(loadPlayer(null)).toBeNull();
   });
+
+  it('песня са Spotify: захоўваецца uri, пасля паўзы ў працы бот не перамотвае на наступную сам', () => {
+    const storage = memoryStorage();
+    const spotifyTrack = { ...track('s', 20_000), uri: 'spotify:track:s' };
+    const s: PlayerState = { ...q.emptyPlayerState(), current: { key: 'sp', track: spotifyTrack }, isPlaying: true, progressMs: 15_000, context: [{ key: 'n', track: { ...track('n'), uri: 'spotify:track:n' } }] };
+    savePlayer(storage, s, 0);
+    const loaded = loadPlayer(storage, 60_000)!;
+    expect(loaded.current?.track.uri).toBe('spotify:track:s');
+    expect(loaded.progressMs).toBe(20_000);
+    expect(loaded.context).toHaveLength(1);
+  });
 });

@@ -101,4 +101,13 @@ describe('чарга', () => {
     expect(o.upcoming[0].requestedBy).toBe('kasia');
     expect('requestedBy' in o.upcoming[1]).toBe(false);
   });
+
+  it('песні са Spotify: час ідзе, але ў канцы песні не пераходзіць далей (наступную скажа Spotify)', () => {
+    const s = state({ current: item('a', undefined, 10_000), isPlaying: true, progressMs: 8000, context: [item('b')] });
+    const after = q.advanceProgress(s, 5000);
+    expect(after.current?.key).toBe('a');
+    expect(after.progressMs).toBe(10_000);
+    expect(q.advanceProgress(after, 1000)).toBe(after);
+    expect(q.advanceProgress({ ...s, isPlaying: false }, 1000).progressMs).toBe(8000);
+  });
 });

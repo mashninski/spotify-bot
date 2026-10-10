@@ -1,8 +1,9 @@
-// Старонка вяртання. Зараз — для праверкі перанакіравання ў доку (ADR-009);
-// на Этапе 3 сюды вернецца ўваход у Spotify (PKCE).
+// Старонка вяртання: сюды Spotify вяртае док пасля ўваходу (ADR-016). Яна абменьвае код на токены,
+// захоўвае іх у localStorage і вяртае док на ўкладку «Налады». Таксама — праверка перанакіравання (ADR-009).
 
 import { safeLocalStorage } from '../../core/settings';
 import { t } from '../../i18n';
+import { completeLogin } from '../../providers/spotify/auth';
 import { readJson, REDIRECT_PENDING_KEY, REDIRECT_RESULT_KEY, REDIRECT_SERVICE, writeJson, type RedirectResult } from '../shared/diag';
 
 const storage = safeLocalStorage();
@@ -10,8 +11,15 @@ const params = new URLSearchParams(location.search);
 const message = document.getElementById('message')!;
 document.title = t('callback.title');
 
+const backToDock = (tab: string) => location.replace(new URL(`dock.html#${tab}`, location.href).toString());
+
 const test = params.get('test');
-if (test === 'redirect') {
+if (params.has('code') || params.has('error')) {
+  message.textContent = t('callback.spotify');
+  // Код ад Spotify больш не патрэбны ў адрасе — каб ён не застаўся ў гісторыі старонкі.
+  history.replaceState(null, '', location.pathname);
+  void completeLogin(storage, params, (url, init) => fetch(url, init)).finally(() => backToDock('settings'));
+} else if (test === 'redirect') {
   const pending = readJson<{ nonce: string }>(storage, REDIRECT_PENDING_KEY);
   const result: RedirectResult = {
     ok: Boolean(pending) && pending?.nonce === params.get('nonce'),
@@ -26,7 +34,7 @@ if (test === 'redirect') {
     // Не крытычна.
   }
   message.textContent = t('callback.redirect');
-  location.replace(new URL('dock.html#diagnostics', location.href).toString());
+  backToDock('diagnostics');
 } else if (test === 'popup') {
   message.textContent = t('callback.popup');
 } else {

@@ -8,6 +8,8 @@ export interface Track {
   artist: string;
   durationMs: number;
   explicit: boolean;
+  /** Spotify URI (`spotify:track:…`): патрэбны, каб кіраваць трэкам у Spotify. У тэставых трэкаў няма. */
+  uri?: string;
 }
 
 /** Адзін запіс у чарзе. Адзін і той жа трэк можа сустракацца ў розных запісах, таму ёсць `key`. */
