@@ -1,32 +1,43 @@
-// Укладка «Праверка»: рызыкі ADR-009 (схаваны док, перанакіраванне) і стан канала да оверлея.
+// Укладка «Праверка»: дзе працуе бот (ADR-015), рызыкі ADR-009 (схаваны док, перанакіраванне) і стан канала да оверлея.
 
 import { safeLocalStorage } from '../../core/settings';
 import { formatDuration, t } from '../../i18n';
 import { obsBrowserInfo, readJson, REDIRECT_RESULT_KEY, type RedirectResult } from '../shared/diag';
 import { useNow, useStore } from '../shared/hooks';
+import { clock, leaderText } from '../shared/leader';
 import type { DockController } from './controller';
 import { Section } from './Section';
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString('be-BY');
 
 export function DiagnosticsTab({ controller }: { controller: DockController }) {
   useNow(1000);
   const monitor = useStore(controller.monitor.state);
-  const mode = useStore(controller.channelMode);
-  const obs = useStore(controller.obsStatus);
+  const channel = useStore(controller.channel);
+  const obs = useStore(controller.obs);
+  const leader = useStore(controller.leader);
+  const conflicts = useStore(controller.conflicts);
   const env = obsBrowserInfo();
   const redirect = readJson<RedirectResult>(safeLocalStorage(), REDIRECT_RESULT_KEY);
-  const stats = controller.sender.stats;
 
   return (
     <div class="diagnostics">
+      <Section title={t('diag.brain')} help={t('diag.brain.help')}>
+        <p class="small">
+          <b>{leaderText(leader, controller.id, 'dock')}</b>
+          {leader && ` ${t('diag.brain.since', { time: clock(leader.since) })}`}
+        </p>
+        <p class={`small ${controller.locksSupported ? '' : 'bad'}`}>
+          {controller.locksSupported ? t('diag.brain.locks') : t('diag.brain.noLocks')}
+        </p>
+        {conflicts > 0 && <p class="small bad">{t('diag.brain.conflicts', { n: conflicts })}</p>}
+      </Section>
+
       <Section title={t('diag.env')} help={t('diag.env.help')}>
         <p class="small">{env.inObs ? `${t('diag.env.obs')} ${env.version}` : t('diag.env.notObs')}</p>
         <p class="small">
-          {t('diag.channel')}: <b>{t(`settings.obs.channel.${mode}`)}</b> · {t('diag.channel.stats', { sent: stats.sent, errors: stats.errors })}
+          {t('diag.channel')}: <b>{t(`settings.obs.channel.${channel.mode}`)}</b> · {t('diag.channel.stats', { sent: channel.sent, errors: channel.errors })}
         </p>
         {obs.version && <p class="small">{t('diag.obsVersion', { version: obs.version })}</p>}
-        {stats.lastError && <p class="muted small mono">{stats.lastError}</p>}
+        {channel.lastError && <p class="muted small mono">{channel.lastError}</p>}
       </Section>
 
       <Section title={t('diag.hidden')} help={t('diag.hidden.help')}>

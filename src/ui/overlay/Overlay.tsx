@@ -1,19 +1,21 @@
-// Оверлей для OBS Browser Source: толькі малюе тое, што прысылае док.
+// Оверлей для OBS Browser Source: малюе тое, што прысылае бот (ён можа працаваць і ў гэтай жа старонцы, ADR-015).
 
 import { useEffect, useRef, useState } from 'preact/hooks';
+import type { BrainNode } from '../../brain/node';
 import { safeLocalStorage } from '../../core/settings';
 import type { OverlayState } from '../../core/types';
 import { formatDuration, t } from '../../i18n';
 import { simulatedLevel } from '../../obs/audio';
-import { listenForDock, type ReceiveChannel } from '../../obs/channel';
+import { listenForBrain, type ReceiveChannel } from '../../obs/channel';
 import { DIAG_MARKER_KEY, obsBrowserInfo, readJson } from '../shared/diag';
-import { useNow } from '../shared/hooks';
+import { useNow, useStore } from '../shared/hooks';
+import { leaderText } from '../shared/leader';
 import { SpotifyLogo, UserIcon } from '../shared/icons';
 import { Waveline } from './Waveline';
 
 export interface OverlayOptions {
   debug: boolean;
-  /** Паказаць тэставыя даныя без дока (для размяшчэння ў сцэне і праверкі выгляду). */
+  /** Паказаць тэставыя даныя без бота (для размяшчэння ў сцэне і праверкі выгляду). */
   demo: boolean;
   /** Запасны шлях: падключэнне да OBS самім оверлеем (пароль з #hash адраса). */
   obs?: { url: string; password: string };
@@ -36,7 +38,7 @@ interface DebugInfo {
   obsStatus: string;
 }
 
-export function Overlay({ options }: { options: OverlayOptions }) {
+export function Overlay({ options, node }: { options: OverlayOptions; node: BrainNode | null }) {
   const [state, setState] = useState<OverlayState | null>(options.demo ? DEMO_STATE : null);
   const levelRef = useRef(0);
   const [debug, setDebug] = useState<DebugInfo>({ channel: '', lastMessageAt: 0, lastPingAt: 0, obsStatus: '' });
@@ -51,7 +53,7 @@ export function Overlay({ options }: { options: OverlayOptions }) {
       frame = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(frame);
     }
-    return listenForDock(
+    return listenForBrain(
       (env, channel) => {
         const msg = env.msg;
         if (msg.type === 'state') setState(msg.state);
@@ -112,18 +114,19 @@ export function Overlay({ options }: { options: OverlayOptions }) {
           )}
         </>
       )}
-      {options.debug && <DebugPanel info={debug} hasState={Boolean(state)} />}
+      {options.debug && <DebugPanel info={debug} hasState={Boolean(state)} node={node} />}
     </div>
   );
 }
 
-function DebugPanel({ info, hasState }: { info: DebugInfo; hasState: boolean }) {
+function DebugPanel({ info, hasState, node }: { info: DebugInfo; hasState: boolean; node: BrainNode | null }) {
   const now = useNow(1000);
   const marker = readJson<number>(safeLocalStorage(), DIAG_MARKER_KEY);
   const env = obsBrowserInfo();
   return (
     <div class="debug">
       <div>{env.inObs ? `${t('diag.env.obs')} ${env.version}` : t('diag.env.notObs')}</div>
+      {node && <BrainInfo node={node} />}
       {!hasState && <div>{t('overlay.debug.waiting')}</div>}
       {info.channel && <div>{t('overlay.debug.channel', { channel: info.channel })}</div>}
       {info.lastMessageAt > 0 && <div>{t('overlay.debug.age', { age: formatDuration(now - info.lastMessageAt) })}</div>}
@@ -134,3 +137,16 @@ function DebugPanel({ info, hasState }: { info: DebugInfo; hasState: boolean }) 
   );
 }
 
+
+function BrainInfo({ node }: { node: BrainNode }) {
+  const leader = useStore(node.leader);
+  const conflicts = useStore(node.conflicts);
+  return (
+    <>
+      <div>
+        {leaderText(leader, node.id, 'overlay')} · {node.locksSupported ? t('overlay.debug.locks.yes') : t('overlay.debug.locks.no')}
+      </div>
+      {conflicts > 0 && <div>{t('overlay.debug.conflicts', { n: conflicts })}</div>}
+    </>
+  );
+}

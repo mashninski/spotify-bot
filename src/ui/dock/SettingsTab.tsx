@@ -10,8 +10,8 @@ import { Section } from './Section';
 
 export function SettingsTab({ controller }: { controller: DockController }) {
   const settings = useStore(controller.settings);
-  const obs = useStore(controller.obsStatus);
-  const mode = useStore(controller.channelMode);
+  const obs = useStore(controller.obs);
+  const mode = useStore(controller.channel).mode;
   const [copied, setCopied] = useState(false);
 
   const connected = obs.status === 'connected' || obs.status === 'connecting' || obs.status === 'error';
@@ -54,13 +54,7 @@ export function SettingsTab({ controller }: { controller: DockController }) {
         </label>
         <div class="row-actions">
           {connected ? (
-            <button
-              class="btn"
-              onClick={() => {
-                controller.disconnectObs();
-                setObs({ autoConnect: false });
-              }}
-            >
+            <button class="btn" onClick={controller.disconnectObs}>
               {t('settings.obs.disconnect')}
             </button>
           ) : (
@@ -122,7 +116,7 @@ export function SettingsTab({ controller }: { controller: DockController }) {
 function AudioSection({ controller }: { controller: DockController }) {
   const settings = useStore(controller.settings);
   const meters = useStore(controller.meters);
-  const obsStatus = useStore(controller.obsStatus).status;
+  const obsStatus = useStore(controller.obs).status;
   const names = Object.keys(meters);
   const selected = settings.audioSource;
   // Выбраная крыніца застаецца ў спісе, нават калі OBS пра яе зараз не паведамляе.

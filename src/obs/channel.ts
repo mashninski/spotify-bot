@@ -1,4 +1,4 @@
-// Канал док → оверлей (ADR-012).
+// Канал «мозг» → оверлей (ADR-013, ADR-015). «Мозг» працуе ў доку або ў адным з оверлеяў.
 // Асноўны шлях: obs-websocket CallVendorRequest → obs-browser `emit_event` → падзея `window` ва ўсіх
 // Browser Source. Оверлею не патрэбны пароль і ўласнае падключэнне.
 // Запасны шлях: BroadcastCustomEvent → падзея CustomEvent (оверлей падключаецца сам, пароль у URL #hash).
@@ -16,7 +16,7 @@ export interface SenderStats {
   lastError: string;
 }
 
-/** Адпраўка паведамленняў з дока. */
+/** Адпраўка паведамленняў са старонкі-лідара. */
 export class OverlaySender {
   private readonly bc: BroadcastChannel | null;
   private obs: ObsClient | null = null;
@@ -49,6 +49,11 @@ export class OverlaySender {
   detach(): void {
     this.obs = null;
     this.mode = 'none';
+  }
+
+  close(): void {
+    this.detach();
+    this.bc?.close();
   }
 
   send(env: Envelope): void {
@@ -84,7 +89,7 @@ export interface ReceiverOptions {
 }
 
 /** Прыём паведамленняў у оверлеі з усіх каналаў з адкіданнем паўтораў. */
-export function listenForDock(
+export function listenForBrain(
   onEnvelope: (env: Envelope, channel: ReceiveChannel) => void,
   options: ReceiverOptions = {},
 ): () => void {

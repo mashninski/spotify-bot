@@ -37,6 +37,4 @@ export function obsBrowserInfo(): { inObs: boolean; version: string } {
   return { inObs: Boolean(info), version: info?.pluginVersion ?? '' };
 }
 
-export function randomId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-}
+export { randomId } from '../../core/id';

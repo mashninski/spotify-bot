@@ -23,7 +23,7 @@ const tabFromHash = (): TabId => {
 
 export function App({ controller }: { controller: DockController }) {
   const [tab, setTab] = useState<TabId>(tabFromHash);
-  const obs = useStore(controller.obsStatus);
+  const obs = useStore(controller.obs);
 
   useEffect(() => {
     const onHash = () => setTab(tabFromHash());
