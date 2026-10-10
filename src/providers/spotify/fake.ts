@@ -7,9 +7,34 @@ export interface FakeTrack {
   name: string;
   artist: string;
   durationMs: number;
+  explicit?: boolean;
 }
 
 export const fakeTrack = (id: string, durationMs = 180_000): FakeTrack => ({ id, name: `Песня ${id}`, artist: `Гурт ${id}`, durationMs });
+
+/** Трэк каталога для пошуку: id з 22 сімвалаў, як у сапраўдным Spotify (каб працавалі спасылкі). */
+export const catalogTrack = (n: number, name: string, artist: string, patch: Partial<FakeTrack> = {}): FakeTrack => ({
+  id: `trk${String(n).padStart(19, '0')}`,
+  name,
+  artist,
+  durationMs: 200_000,
+  ...patch,
+});
+
+/** Каталог па змаўчанні: што знойдзе пошук падробкі. */
+export const FAKE_CATALOG: FakeTrack[] = [
+  catalogTrack(1, 'Get Lucky', 'Daft Punk'),
+  catalogTrack(2, 'Get Lucky - Karaoke Version', 'Party Singers'),
+  catalogTrack(3, 'Гісторыя майго жыцця', 'NaviBand'),
+  catalogTrack(4, '2112', 'Rush', { durationMs: 20 * 60_000 + 33_000 }),
+  catalogTrack(5, 'Lose Yourself', 'Eminem', { explicit: true }),
+  catalogTrack(6, 'Тры чарапахі', 'N.R.M.'),
+  // Як у SPOTIFY_TEST_QUERIES (тэставыя заказы з дока) — каб іх можна было праверыць з падробкай.
+  catalogTrack(7, 'Never Gonna Give You Up', 'Rick Astley', { id: '4cOdK2wGLETKBW3PvgPWqT' }),
+  catalogTrack(8, 'Bohemian Rhapsody', 'Queen', { id: '4u7EnebtmKWzUH433cf5Qv' }),
+  catalogTrack(9, "Don't Stop Me Now", 'Queen'),
+  catalogTrack(10, 'Судно (Борис Рыжий)', 'Molchat Doma'),
+];
 
 const toJson = (t: FakeTrack) => ({
   type: 'track',
@@ -18,7 +43,7 @@ const toJson = (t: FakeTrack) => ({
   name: t.name,
   artists: [{ name: t.artist }],
   duration_ms: t.durationMs,
-  explicit: false,
+  explicit: t.explicit === true,
 });
 
 export function memoryStorage() {
@@ -57,6 +82,10 @@ export function createFakeSpotify() {
     progressMs: 1000,
     current: fakeTrack('a') as FakeTrack | null,
     queue: [fakeTrack('b'), fakeTrack('c'), fakeTrack('d')],
+    /** «Далей у чарзе» Spotify (`POST /me/player/queue`): грае раней за `queue` (кантэкст). */
+    userQueue: [] as FakeTrack[],
+    /** Што знаходзяць пошук і `GET /tracks/{id}`. */
+    catalog: [...FAKE_CATALOG],
     history: [] as FakeTrack[],
     saved: new Set<string>(),
     volume: 60,
@@ -109,7 +138,26 @@ export function createFakeSpotify() {
       return { status: 200 };
     }
     if (method === 'GET' && p === '/me/player/queue') {
-      return { status: 200, body: { currently_playing: state.current && toJson(state.current), queue: state.queue.map(toJson) } };
+      const queue = [...state.userQueue, ...state.queue].map(toJson);
+      return { status: 200, body: { currently_playing: state.current && toJson(state.current), queue } };
+    }
+    if (method === 'GET' && p === '/search') {
+      const limit = Number(query.get('limit') ?? '5');
+      if (!(limit >= 0 && limit <= 10)) return { status: 400, body: { error: { status: 400, message: 'Invalid limit' } } };
+      const words = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+      const score = (t: FakeTrack) => words.filter((w) => `${t.name} ${t.artist}`.toLowerCase().includes(w)).length;
+      const items = state.catalog
+        .filter((t) => score(t) > 0)
+        .sort((a, b) => score(b) - score(a))
+        .slice(0, limit)
+        .map(toJson);
+      return { status: 200, body: { tracks: { items, limit, offset: 0, total: items.length } } };
+    }
+    if (method === 'GET' && p.startsWith('/tracks/')) {
+      const id = decodeURIComponent(p.slice('/tracks/'.length));
+      if (!/^[A-Za-z0-9]{22}$/.test(id)) return { status: 400, body: { error: { status: 400, message: 'Invalid base62 id' } } };
+      const track = state.catalog.find((t) => t.id === id);
+      return track ? { status: 200, body: toJson(track) } : { status: 404, body: { error: { status: 404, message: 'Resource not found' } } };
     }
     if (method === 'GET' && p === '/me/library/contains') return { status: 200, body: uris.map((u) => state.saved.has(u)) };
     if (method === 'PUT' && p === '/me/library') {
@@ -127,10 +175,15 @@ export function createFakeSpotify() {
       state.playing = true;
       return { status: 200 };
     }
+    if (method === 'POST' && p === '/me/player/queue') {
+      const id = (query.get('uri') ?? '').replace('spotify:track:', '');
+      const track = [...state.catalog, ...state.queue].find((t) => t.id === id);
+      if (!track) return { status: 400, body: { error: { status: 400, message: 'Invalid track uri' } } };
+      state.userQueue.push(track);
+      return { status: 204 };
+    }
     if (method === 'POST' && p === '/me/player/next') {
-      if (state.current) state.history.push(state.current);
-      state.current = state.queue.shift() ?? null;
-      state.progressMs = 0;
+      advance();
       return { status: 200 };
     }
     if (method === 'POST' && p === '/me/player/previous') {
@@ -143,6 +196,13 @@ export function createFakeSpotify() {
       return { status: 200 };
     }
     return { status: 404, body: { error: { status: 404, message: 'not found' } } };
+  }
+
+  /** Наступная песня: спачатку «Далей у чарзе», потым кантэкст (як у Spotify). */
+  function advance(): void {
+    if (state.current) state.history.push(state.current);
+    state.current = state.userQueue.shift() ?? state.queue.shift() ?? null;
+    state.progressMs = 0;
   }
 
   function token(body: URLSearchParams): Reply {
@@ -181,5 +241,11 @@ export function createFakeSpotify() {
     return new Response(reply.status === 204 ? null : text, { status: reply.status, headers: reply.headers });
   };
 
-  return { state, calls, fetch };
+  /** Колькі разоў быў такі запыт (напрыклад, `POST /me/player/queue`). */
+  const count = (call: string) => calls.filter((c) => c === call).length;
+
+  /** Бягучая песня скончылася сама — Spotify пераходзіць да наступнай. */
+  const finishSong = () => advance();
+
+  return { state, calls, fetch, count, finishSong };
 }

@@ -159,6 +159,13 @@ export function createSpotifyApi(options: SpotifyApiOptions) {
     previous: () => request('POST', '/me/player/previous'),
     /** Гучнасць Spotify на прыладзе, дзе ён грае (0…100). */
     volume: (percent: number) => request('PUT', `/me/player/volume?volume_percent=${Math.round(percent)}`),
+    /** Адзін трэк па id (Этап 3б; пакетны `GET /tracks?ids=` выдалены ў лютым 2026). */
+    track: (id: string) => request('GET', `/tracks/${encodeURIComponent(id)}`),
+    /** Пошук трэкаў: у Development Mode `limit` не больш за 10 (люты 2026). */
+    search: (query: string, limit = 10) =>
+      request('GET', `/search?type=track&limit=${Math.min(10, Math.max(1, limit))}&q=${encodeURIComponent(query)}`),
+    /** Дадаць трэк у канец «Далей у чарзе» Spotify (выдаліць адтуль API не дазваляе, ADR-007). */
+    addToQueue: (uri: string) => request('POST', `/me/player/queue?uri=${encodeURIComponent(uri)}`),
     /** Дадаць у «Любімыя трэкі» (ADR-016: `PUT /me/library` замест выдаленага `PUT /me/tracks`). */
     saveToLibrary: (list: string[]) => request('PUT', `/me/library?uris=${uris(list)}`),
     async libraryContains(list: string[]): Promise<boolean[]> {
