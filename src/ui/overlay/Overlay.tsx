@@ -1,6 +1,6 @@
 // Оверлей для OBS Browser Source: малюе тое, што прысылае бот (ён можа працаваць і ў гэтай жа старонцы, ADR-015).
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { BrainNode } from '../../brain/node';
 import { safeLocalStorage } from '../../core/settings';
 import type { OverlayState, OverlayTrack } from '../../core/types';
@@ -87,21 +87,7 @@ export function Overlay({ options, node }: { options: OverlayOptions; node: Brai
             <TrackMeta current={current} />
             <Waveline levelRef={levelRef} playing={state.isPlaying} width={112} height={36} />
           </div>
-          {state.upcoming.length > 0 && (
-            <ol class="upcoming">
-              {state.upcoming.map((item) => (
-                <li key={item.key}>
-                  <span class="up-title">{item.title}</span>
-                  <span class="up-artist"> · {item.artist}</span>
-                  {item.requestedBy && (
-                    <span class="by">
-                      <UserIcon /> {item.requestedBy}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
+          {state.upcoming.length > 0 && <Upcoming items={state.upcoming} />}
         </>
       )}
       {options.debug && <DebugPanel info={debug} hasState={Boolean(state)} node={node} />}
@@ -141,30 +127,45 @@ function BrainInfo({ node }: { node: BrainNode }) {
   );
 }
 
-/** Колькі старая песня плаўна знікае (тое ж, што `track-out` у overlay.css). */
-const LEAVE_MS = 450;
+/** Колькі старая назва сыходзіць (тое ж, што `track-out` у overlay.css). */
+const LEAVE_MS = 260;
+
+const sameText = (a: OverlayTrack, b: OverlayTrack) =>
+  a.title === b.title && a.artist === b.artist && a.requestedBy === b.requestedBy;
 
 /**
- * Назва і выканаўца. Пры змене песні старая плаўна сыходзіць уверх, а новая ўзнікае знізу —
- * абедзве некаторы час на экране адна над адной, без рэзкага пераскоку.
+ * Назва і выканаўца. Пры змене песні спачатку старая назва плаўна сыходзіць уверх, і толькі потым
+ * знізу з’яўляецца новая — тэксты не накладваюцца. Калі песні мяняюцца адна за адной хутчэй
+ * за анімацыю, сыходзіць тая назва, якую відаць, а з’яўляецца апошняя.
  */
 function TrackMeta({ current }: { current: OverlayTrack }) {
-  const previous = useRef<OverlayTrack>(current);
+  const shown = useRef<OverlayTrack>(current);
+  const [version, setVersion] = useState(0);
   const [leaving, setLeaving] = useState<OverlayTrack | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const old = previous.current;
-    previous.current = current;
-    if (old.key === current.key) return;
+    const old = shown.current;
+    shown.current = current;
+    // Той жа тэкст пад іншым ключом (напрыклад, Spotify пацвердзіў песню) — без анімацыі.
+    if (sameText(old, current)) return;
+    setVersion((v) => v + 1);
+    if (timer.current) return; // старая назва ўжо сыходзіць
     setLeaving(old);
-    const id = setTimeout(() => setLeaving(null), LEAVE_MS);
-    return () => clearTimeout(id);
-  }, [current.key]);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      setLeaving(null);
+    }, LEAVE_MS);
+  }, [current.key, current.title, current.artist, current.requestedBy]);
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
 
   return (
     <div class="meta-box">
-      {leaving && <MetaLines track={leaving} class="meta leaving" key={`out-${leaving.key}`} />}
-      <MetaLines track={current} class="meta" key={current.key} />
+      {leaving && <MetaLines track={leaving} class="meta leaving" key={`out-${version}`} />}
+      <MetaLines track={current} class={version > 0 ? 'meta entering' : 'meta'} key={`in-${version}`} />
     </div>
   );
 }
@@ -182,5 +183,49 @@ function MetaLines({ track, class: className }: { track: OverlayTrack; class: st
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Наступныя песні. Новая песня ў спісе плаўна з’яўляецца, а тыя, што засталіся, плаўна
+ * пад’язджаюць на новае месца (калі першая песня пачала граць), а не пераскокваюць.
+ */
+function Upcoming({ items }: { items: OverlayTrack[] }) {
+  const list = useRef<HTMLOListElement>(null);
+  const tops = useRef(new Map<string, number>());
+
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const next = new Map<string, number>();
+    for (const li of Array.from(el.children) as HTMLElement[]) {
+      const key = li.dataset.key ?? '';
+      const top = li.offsetTop;
+      next.set(key, top);
+      const before = tops.current.get(key);
+      if (before !== undefined && before !== top && typeof li.animate === 'function') {
+        li.animate([{ transform: `translateY(${before - top}px)` }, { transform: 'none' }], {
+          duration: 420,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        });
+      }
+    }
+    tops.current = next;
+  });
+
+  return (
+    <ol class="upcoming" ref={list}>
+      {items.map((item) => (
+        <li key={item.key} data-key={item.key}>
+          <span class="up-title">{item.title}</span>
+          <span class="up-artist"> · {item.artist}</span>
+          {item.requestedBy && (
+            <span class="by">
+              <UserIcon /> {item.requestedBy}
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }

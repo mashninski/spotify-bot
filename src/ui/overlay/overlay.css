@@ -46,7 +46,8 @@ body {
   flex-shrink: 0;
 }
 
-/* Назва песні: новая ўзнікае, старая (`.leaving`) сыходзіць паверх яе — гл. TrackMeta. */
+/* Назва песні: старая (`.leaving`) спачатку сыходзіць, потым з’яўляецца новая (`.entering`) — гл. TrackMeta.
+   Без blur: у канцы анімацыі ён прымушае перамаляваць тэкст, і літары заўважна «скачуць». */
 .meta-box {
   position: relative;
   flex: 1;
@@ -55,13 +56,17 @@ body {
 
 .meta {
   min-width: 0;
-  animation: track-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s backwards;
+}
+
+.meta.entering {
+  animation: track-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) 0.24s backwards;
 }
 
 .meta.leaving {
   position: absolute;
   inset: 0;
-  animation: track-out 0.45s cubic-bezier(0.55, 0, 0.75, 0.3) forwards;
+  animation: track-out 0.26s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
 }
 
 .title,
@@ -112,10 +117,12 @@ body {
   box-sizing: border-box;
 }
 
+/* Анімацыя ідзе да ўласнай празрыстасці радка (у keyframes няма `to`), таму ў канцы няма рыўка. */
 .upcoming li {
   font-size: 12px;
   line-height: 18px;
-  animation: track-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transition: opacity 0.4s ease;
+  animation: up-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards;
 }
 
 .upcoming li:nth-child(1) {
@@ -135,25 +142,21 @@ body {
 @keyframes track-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
-    filter: blur(2px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-    filter: none;
+    transform: translateY(6px);
   }
 }
 
 @keyframes track-out {
-  from {
-    opacity: 1;
-    transform: none;
-  }
   to {
     opacity: 0;
-    transform: translateY(-8px);
-    filter: blur(2px);
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes up-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
 }
 
