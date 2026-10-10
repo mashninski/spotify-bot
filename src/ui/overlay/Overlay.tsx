@@ -140,27 +140,28 @@ const sameText = (a: OverlayTrack, b: OverlayTrack) =>
  */
 function TrackMeta({ current }: { current: OverlayTrack }) {
   const shown = useRef<OverlayTrack>(current);
-  const [version, setVersion] = useState(0);
-  const [leaving, setLeaving] = useState<OverlayTrack | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Стан анімацыі мяняецца ўжо падчас малявання, а не пасля яго: інакш на адзін кадр
+  // з'яўляецца новая назва без анімацыі, а потым — старая, якая сыходзіць («рывок»).
+  const anim = useRef<{ version: number; leaving: OverlayTrack | null }>({ version: 0, leaving: null });
+  const [, rerender] = useState(0);
+
+  if (!sameText(shown.current, current)) {
+    // Калі старая назва ўжо сыходзіць, яна і сыходзіць далей, а з'яўляецца апошняя.
+    if (!anim.current.leaving) anim.current.leaving = shown.current;
+    anim.current.version++;
+  }
+  // Той жа тэкст пад іншым ключом (напрыклад, Spotify пацвердзіў песню) — без анімацыі.
+  shown.current = current;
+  const { version, leaving } = anim.current;
 
   useEffect(() => {
-    const old = shown.current;
-    shown.current = current;
-    // Той жа тэкст пад іншым ключом (напрыклад, Spotify пацвердзіў песню) — без анімацыі.
-    if (sameText(old, current)) return;
-    setVersion((v) => v + 1);
-    if (timer.current) return; // старая назва ўжо сыходзіць
-    setLeaving(old);
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      setLeaving(null);
+    if (!leaving) return;
+    const id = setTimeout(() => {
+      anim.current.leaving = null;
+      rerender((n) => n + 1);
     }, LEAVE_MS);
-  }, [current.key, current.title, current.artist, current.requestedBy]);
-
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+    return () => clearTimeout(id);
+  }, [leaving]);
 
   return (
     <div class="meta-box">
