@@ -209,6 +209,19 @@ describe('заказы гледачоў у Spotify (Этап 3б, ADR-017)', () 
     expect(spotify.count('POST /me/player/queue')).toBe(1);
   });
 
+  it('стрымер перамотаў песню ў самы канец, заказ не паспеў у Spotify — ён усё роўна грае наступным', async () => {
+    const { dock, spotify } = await connected();
+    await addRequests(dock, 2);
+    const [first] = dock.player.get().requests;
+    expect(spotify.count('POST /me/player/queue')).toBe(0);
+    spotify.finishSong(); // Spotify уключыў плэйліст («Песня b»), бот пра перамотку не ведаў
+    await vi.waitFor(() => expect(spotify.state.current?.id).toBe(first.track.id), SLOW);
+    await vi.waitFor(() => expect(dock.player.get().current).toMatchObject({ key: first.key, requestedBy: first.requestedBy }), WAIT);
+    expect(spotify.state.history.map((t) => t.id)).toContain('b');
+    expect(dock.player.get().requests).toHaveLength(1);
+    expect(spotify.count('POST /me/player/queue')).toBe(1);
+  }, 15_000); // без акна Spotify у OBS бот даведваецца пра новую песню з апытання (да 5 с)
+
   it('«прайграць зараз» уключае заказ адразу, астатнія застаюцца; «выдаліць» — толькі з нашай чаргі', async () => {
     const { dock, spotify } = await connected();
     await addRequests(dock, 3);

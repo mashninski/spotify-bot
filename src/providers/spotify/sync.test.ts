@@ -36,6 +36,12 @@ describe('інтэрвалы апытання Spotify', () => {
     expect(pollDelay(null, true)).toBe(POLL.idleWatched);
   });
 
+  it('пакуль чакае неадпраўлены заказ — часцей, каб убачыць перамотку ў канец песні', () => {
+    expect(pollDelay(playback(true, 10_000), true, true)).toBe(POLL.requestWaiting);
+    expect(pollDelay(playback(true, 10_000), false, true)).toBe(POLL.requestWaiting);
+    expect(pollDelay(playback(false, 10_000), true, true)).toBe(POLL.pausedWatched);
+  });
+
   it('за гадзіну музыкі — не больш за ~600 апытанняў стану', () => {
     expect(3600_000 / POLL.playing).toBeLessThanOrEqual(600);
   });

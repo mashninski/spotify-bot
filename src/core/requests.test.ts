@@ -5,6 +5,7 @@ import {
   hideSent,
   LOST_GRACE_MS,
   markSent,
+  missedRequest,
   reconcileQueue,
   removeRequest,
   requestToSend,
@@ -120,5 +121,23 @@ describe('зверка з чаргой Spotify', () => {
     const context = ['r1', 'x', 'r9', 'r1'].map((id) => ({ track: track(id) }));
     const shown = hideSent(context, { requests: [item('r1', 'a', 5)], skip: { uri: uri('r9'), at: 0 } });
     expect(shown.map((c) => c.track.id)).toEqual(['x', 'r1']);
+  });
+});
+
+describe('заказ не паспеў трапіць у Spotify', () => {
+  const ctx = (...ids: string[]) => ids.map((id) => item(id));
+  const before: PlayerState = { ...playing(170_000, [item('r1', 'a'), item('r2', 'b')]), context: ctx('x', 'y') };
+
+  it('Spotify сам перайшоў да наступнай песні плэйліста — першы заказ трэба ўключыць адразу', () => {
+    const after = { ...before, current: item('x'), context: ctx('y') };
+    expect(missedRequest(before, after)?.key).toBe('k-r1');
+  });
+
+  it('стрымер сам выбраў іншую песню, заказ ужо ў Spotify або зайграў — не перабіваем', () => {
+    expect(missedRequest(before, { ...before, current: item('z') })).toBeNull();
+    const sent = { ...before, requests: [item('r1', 'a', 5)] };
+    expect(missedRequest(sent, { ...sent, current: item('x') })).toBeNull();
+    expect(missedRequest(before, { ...before, current: item('r1', 'a'), requests: [item('r2', 'b')] })).toBeNull();
+    expect(missedRequest(before, before)).toBeNull();
   });
 });

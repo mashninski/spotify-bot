@@ -118,8 +118,12 @@ export function createBrain(options: BrainOptions) {
     api,
     onPlayback: (playback, queue) => {
       if (!spotifyMode) return;
+      const before = player.get();
       player.set((s) => applyPlayback(s, playback, queue));
       skipRemovedRequest();
+      // Spotify перайшоў да плэйліста, а заказ не паспеў трапіць у Spotify — уключаем заказ адразу (ADR-017).
+      const missed = rq.missedRequest(before, player.get());
+      if (missed) playRequestNow(missed.key);
     },
     onInfo: (patch) => stores.spotify.set((s) => ({ ...s, ...patch })),
     onNotice: (n, kind) => showNotice(t(`spotify.notice.${n}`), kind),
@@ -264,6 +268,8 @@ export function createBrain(options: BrainOptions) {
     lastTickAt = now;
     if (spotifyMode) {
       player.set((s) => q.advanceProgress(s, delta));
+      const first = player.get().requests[0];
+      spotify.setRequestWaiting(Boolean(first?.track.uri && first.sentAt === undefined));
       spotify.tick(now);
       sendNextRequest(now);
       checkSpotifyWindow(now);

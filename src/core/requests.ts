@@ -116,3 +116,18 @@ export function hideSent<T extends { track: { uri?: string } }>(context: T[], st
     return false;
   });
 }
+
+/**
+ * Заказ не паспеў трапіць у Spotify, і Spotify сам перайшоў да наступнай песні са сваёй чаргі
+ * (стрымер перамотаў песню ў самы канец або націснуў «наступная» ў Spotify). Тады першы заказ трэба
+ * ўключыць адразу, каб ён граў раней за плэйліст. Калі стрымер сам выбраў іншую песню
+ * (не наступную ў чарзе Spotify), яе не перабіваем — заказ зайграе пасля яе.
+ */
+export function missedRequest(before: PlayerState, after: PlayerState): QueueItem | null {
+  const first = after.requests[0];
+  if (!first?.track.uri || first.sentAt !== undefined || before.requests[0]?.key !== first.key) return null;
+  const was = before.current;
+  const now = after.current;
+  if (!was || !now?.track.uri || now.requestedBy || now.track.uri === was.track.uri) return null;
+  return before.context[0]?.track.uri === now.track.uri ? first : null;
+}

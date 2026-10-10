@@ -18,7 +18,12 @@ export const POLL = {
    * Тое ж, калі бот бачыць акно Spotify праз OBS: пра змену песні, паўзу і адкрыццё Spotify скажа загаловак акна,
    * а апытанне патрэбна толькі, каб выправіць час песні (стрымер мог перамотваць) і заўважыць змены на іншых прыладах.
    */
-  playingWatched: 20_000,
+  playingWatched: 10_000,
+  /**
+   * Пакуль у чарзе чакае заказ, які яшчэ не трапіў у Spotify: бот павінен хутка ўбачыць перамотку ў канец песні,
+   * каб паспець адправіць заказ (ADR-017).
+   */
+  requestWaiting: 5000,
   pausedWatched: 30_000,
   idleWatched: 30_000,
   /** Пасля канца песні — каб пераход на наступную быў відаць амаль адразу. */
@@ -45,11 +50,12 @@ export const POLL = {
 } as const;
 
 /** Калі апытаць зноў пасля такога стану плэера. */
-export function pollDelay(playback: SpotifyPlayback | null, windowWatched = false): number {
+export function pollDelay(playback: SpotifyPlayback | null, windowWatched = false, requestWaiting = false): number {
   if (!playback?.track) return windowWatched ? POLL.idleWatched : POLL.idle;
   if (!playback.isPlaying) return windowWatched ? POLL.pausedWatched : POLL.paused;
   const remaining = playback.track.durationMs - playback.progressMs;
-  return Math.max(POLL.min, Math.min(windowWatched ? POLL.playingWatched : POLL.playing, remaining + POLL.endGrace));
+  const interval = requestWaiting ? POLL.requestWaiting : windowWatched ? POLL.playingWatched : POLL.playing;
+  return Math.max(POLL.min, Math.min(interval, remaining + POLL.endGrace));
 }
 
 export type SpotifyStatus =
@@ -140,6 +146,8 @@ export function createSpotifySync(options: SpotifySyncOptions) {
 
   /** Бот бачыць акно Spotify праз OBS — можна апытваць радзей. */
   let windowWatched = false;
+  /** У нашай чарзе чакае заказ, які яшчэ не адпраўлены ў Spotify. */
+  let requestWaiting = false;
 
   let pendingVolume: number | null = null;
   let volumeBusy = false;
@@ -275,7 +283,7 @@ export function createSpotifySync(options: SpotifySyncOptions) {
         info.supportsVolume = playback?.supportsVolume ?? false;
       }
       options.onInfo(info);
-      nextPollAt = now() + pollDelay(playback, windowWatched);
+      nextPollAt = now() + pollDelay(playback, windowWatched, requestWaiting);
       if (changed) {
         const track = playback?.track;
         if (track && canSave(track)) {
@@ -367,6 +375,13 @@ export function createSpotifySync(options: SpotifySyncOptions) {
       if (watched === windowWatched) return;
       windowWatched = watched;
       if (!watched && active) pollSoon(POLL.playing);
+    },
+
+    /** Ці чакае ў нашай чарзе заказ, які яшчэ не ў Spotify (тады апытваць часцей, `POLL.requestWaiting`). */
+    setRequestWaiting(waiting: boolean): void {
+      if (waiting === requestWaiting) return;
+      requestWaiting = waiting;
+      if (waiting && active) pollSoon(POLL.requestWaiting);
     },
 
     /** Нешта ў Spotify, падобна, змянілася (загаловак акна) — апытаць хутчэй, калі можна. */
