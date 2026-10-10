@@ -59,6 +59,13 @@ export function createFakeSpotify() {
     queue: [fakeTrack('b'), fakeTrack('c'), fakeTrack('d')],
     history: [] as FakeTrack[],
     saved: new Set<string>(),
+    volume: 60,
+    /**
+     * Сапраўдны Spotify паказвае вынік кнопкі не імгненна. Колькі наступных `GET /me/player`
+     * пасля кнопкі адкажуць старым станам.
+     */
+    lagPolls: 0,
+    stale: null as unknown,
     validToken: 'access-1',
     validRefresh: 'refresh-1',
     tokenCounter: 1,
@@ -68,23 +75,38 @@ export function createFakeSpotify() {
   };
   const calls: string[] = [];
 
+  const noDevice: Reply = { status: 404, body: { error: { status: 404, message: 'No active device', reason: 'NO_ACTIVE_DEVICE' } } };
+
+  function playerReply(): Reply {
+    if (!state.device) return { status: 204 };
+    return {
+      status: 200,
+      body: {
+        is_playing: state.playing,
+        progress_ms: state.progressMs,
+        item: state.current ? toJson(state.current) : null,
+        currently_playing_type: 'track',
+        device: { name: state.device, volume_percent: state.volume, supports_volume: true },
+      },
+    };
+  }
+
   function api(method: string, path: string): Reply {
     const p = path.split('?')[0];
     const query = new URLSearchParams(path.split('?')[1] ?? '');
     const uris = (query.get('uris') ?? '').split(',').filter(Boolean);
     if (method === 'GET' && p === '/me') return { status: 200, body: { id: 'user1', display_name: 'Стрымер' } };
     if (method === 'GET' && p === '/me/player') {
-      if (!state.device) return { status: 204 };
-      return {
-        status: 200,
-        body: {
-          is_playing: state.playing,
-          progress_ms: state.progressMs,
-          item: state.current ? toJson(state.current) : null,
-          currently_playing_type: 'track',
-          device: { name: state.device },
-        },
-      };
+      if (state.stale && state.lagPolls > 0) {
+        state.lagPolls--;
+        return { status: 200, body: state.stale };
+      }
+      return playerReply();
+    }
+    if (method === 'PUT' && p === '/me/player/volume') {
+      if (!state.device) return noDevice;
+      state.volume = Number(query.get('volume_percent'));
+      return { status: 200 };
     }
     if (method === 'GET' && p === '/me/player/queue') {
       return { status: 200, body: { currently_playing: state.current && toJson(state.current), queue: state.queue.map(toJson) } };
@@ -94,8 +116,9 @@ export function createFakeSpotify() {
       for (const u of uris) state.saved.add(u);
       return { status: 200 };
     }
-    const noDevice = { status: 404, body: { error: { status: 404, message: 'No active device', reason: 'NO_ACTIVE_DEVICE' } } };
     if (p.startsWith('/me/player/') && !state.device) return noDevice;
+    // Перад кнопкай запамінаем стан — яго «запаздалы» Spotify пакажа яшчэ некалькі апытанняў.
+    if (method !== 'GET' && p.startsWith('/me/player/')) state.stale = playerReply().body;
     if (method === 'PUT' && p === '/me/player/pause') {
       state.playing = false;
       return { status: 200 };

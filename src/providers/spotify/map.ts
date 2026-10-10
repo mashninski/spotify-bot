@@ -1,6 +1,7 @@
 // Пераўтварэнне адказаў Spotify Web API ў нашы тыпы (ADR-016). Чыстыя функцыі — лёгка тэставаць.
 
-import type { PlayerState, Track } from '../../core/types';
+import { HISTORY_LIMIT, RESTART_THRESHOLD_MS } from '../../core/queue';
+import type { PlayerState, QueueItem, Track } from '../../core/types';
 
 /** Тое, што бот ведае пра плэер Spotify пасля аднаго апытання. */
 export interface SpotifyPlayback {
@@ -10,6 +11,10 @@ export interface SpotifyPlayback {
   track: Track | null;
   /** Назва прылады, на якой адкрыты Spotify. */
   device: string;
+  /** Гучнасць прылады 0…100 (`null` — невядома). */
+  volume: number | null;
+  /** Ці дазваляе прылада мяняць гучнасць праз API. */
+  supportsVolume: boolean;
 }
 
 const isObject = (x: unknown): x is Record<string, any> => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -44,11 +49,15 @@ export function parsePlayback(raw: unknown): SpotifyPlayback | null {
   if (!isObject(raw)) return null;
   const track = raw.currently_playing_type === 'ad' ? null : parseItem(raw.item);
   const progress = typeof raw.progress_ms === 'number' && raw.progress_ms >= 0 ? raw.progress_ms : 0;
+  const device = isObject(raw.device) ? raw.device : {};
+  const volume = typeof device.volume_percent === 'number' ? Math.max(0, Math.min(100, Math.round(device.volume_percent))) : null;
   return {
     isPlaying: raw.is_playing === true && track !== null,
     progressMs: track ? Math.min(progress, track.durationMs) : 0,
     track,
-    device: isObject(raw.device) && typeof raw.device.name === 'string' ? raw.device.name : '',
+    device: typeof device.name === 'string' ? device.name : '',
+    volume,
+    supportsVolume: volume !== null && device.supports_volume !== false,
   };
 }
 
@@ -78,7 +87,48 @@ export function applyPlayback(state: PlayerState, playback: SpotifyPlayback | nu
   const same = state.current?.track.uri === track.uri;
   const current = same && state.current ? { ...state.current, track } : { key: `sp:${track.uri}`, track };
   let context = state.context;
-  if (queue) context = queue.slice(0, CONTEXT_LIMIT).map((t, i) => ({ key: `sp:${t.uri}:${i}`, track: t }));
+  if (queue) context = contextItems(queue.slice(0, CONTEXT_LIMIT));
   else if (!same && context[0]?.track.uri === track.uri) context = context.slice(1);
-  return { ...state, current, isPlaying: playback.isPlaying, progressMs: playback.progressMs, context };
+  // Прайграныя песні патрэбны, каб «Папярэдняя» паказала вынік адразу, яшчэ да адказу Spotify.
+  let history = state.history;
+  if (!same && state.current) history = [...history, state.current].slice(-HISTORY_LIMIT);
+  return { ...state, current, isPlaying: playback.isPlaying, progressMs: playback.progressMs, context, history };
+}
+
+/**
+ * Ключы трэкаў чаргі не залежаць ад месца ў чарзе: калі чарга зрушылася на адну песню,
+ * астатнія застаюцца тымі ж элементамі (без лішняй анімацыі ў доку і оверлеі).
+ */
+function contextItems(tracks: Track[]): QueueItem[] {
+  const seen = new Map<string, number>();
+  return tracks.map((t) => {
+    const id = t.uri ?? t.id;
+    const n = (seen.get(id) ?? 0) + 1;
+    seen.set(id, n);
+    return { key: `sp:${id}#${n}`, track: t };
+  });
+}
+
+/**
+ * Што паказаць адразу пасля кнопкі, не чакаючы Spotify. «Наступная» — першая песня з чаргі;
+ * «Папярэдняя» — як у Spotify: пасля 3 с песня пачынаецца нанова, інакш — папярэдняя з гісторыі.
+ * Адказ Spotify праз долі секунды пацвердзіць або выправіць гэта.
+ */
+export function optimisticSkip(state: PlayerState, direction: 'next' | 'previous'): PlayerState {
+  if (direction === 'next') {
+    const [next, ...context] = state.context;
+    if (!next) return state;
+    const history = state.current ? [...state.history, state.current].slice(-HISTORY_LIMIT) : state.history;
+    return { ...state, current: next, context, history, progressMs: 0 };
+  }
+  if (state.current && state.progressMs > RESTART_THRESHOLD_MS) return { ...state, progressMs: 0 };
+  const previous = state.history[state.history.length - 1];
+  if (!previous) return { ...state, progressMs: 0 };
+  return {
+    ...state,
+    current: previous,
+    history: state.history.slice(0, -1),
+    context: state.current ? [state.current, ...state.context] : state.context,
+    progressMs: 0,
+  };
 }

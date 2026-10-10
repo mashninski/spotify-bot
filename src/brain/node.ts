@@ -222,6 +222,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     disconnectObs: () => command({ type: 'obs-disconnect' }),
     saveCurrent: () => command({ type: 'save-current' }),
     disconnectSpotify: () => command({ type: 'spotify-disconnect' }),
+    setVolume: (value: number) => command({ type: 'volume', value }),
   };
 }
 

@@ -1,11 +1,21 @@
 // Укладка «Плэер»: што грае ў Spotify, кіраванне, «+» у «Любімыя трэкі», чарга заказаў.
 
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { QueueItem } from '../../core/types';
 import { formatClock, t } from '../../i18n';
 import { canSave } from '../../providers/spotify/map';
 import { useStore } from '../shared/hooks';
-import { CheckCircleIcon, CloseIcon, NextIcon, PauseIcon, PlayIcon, PlusCircleIcon, PreviousIcon, UserIcon } from '../shared/icons';
+import {
+  CheckCircleIcon,
+  CloseIcon,
+  NextIcon,
+  PauseIcon,
+  PlayIcon,
+  PlusCircleIcon,
+  PreviousIcon,
+  UserIcon,
+  VolumeIcon,
+} from '../shared/icons';
 import type { DockController } from './controller';
 import { Section } from './Section';
 
@@ -28,7 +38,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
     <div class="player">
       <Section title={t('player.now')} help={t('player.now.help')}>
         {current ? (
-          <>
+          <div class="now-track" key={current.key}>
             <div class="now-head">
               <div class="now-title">{current.track.title}</div>
               {spotifyOn && canSave(current.track) && <LikeButton controller={controller} uri={current.track.uri!} />}
@@ -48,7 +58,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
               <span>{formatClock(state.progressMs)}</span>
               <span>{formatClock(current.track.durationMs)}</span>
             </div>
-          </>
+          </div>
         ) : !spotifyOn ? (
           <div class="now-title muted">
             {t('player.spotifyOff')}{' '}
@@ -59,7 +69,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
         ) : (
           <div class="now-title muted">{spotify.status === 'ok' && !spotify.device ? t('player.spotifyIdle') : t('player.nothing')}</div>
         )}
-        <div class="controls">
+        <div class={spotifyOn ? 'controls with-volume' : 'controls'}>
           <button class="icon-btn" title={t('player.previous')} aria-label={t('player.previous')} onClick={controller.previous}>
             <PreviousIcon />
           </button>
@@ -75,6 +85,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
           <button class="icon-btn" title={t('player.next')} aria-label={t('player.next')} onClick={controller.next}>
             <NextIcon />
           </button>
+          {spotifyOn && <VolumeControl controller={controller} />}
         </div>
       </Section>
 
@@ -173,5 +184,54 @@ function LikeButton({ controller, uri }: { controller: DockController; uri: stri
     >
       <PlusCircleIcon />
     </button>
+  );
+}
+
+/** Апошняя ненулявая гучнасць — каб кнопка дынаміка вярнула яе пасля «без гуку» (як у Spotify). */
+let volumeBeforeMute = 50;
+
+/** Гучнасць самога дадатку Spotify (прылады, на якой ён грае). */
+function VolumeControl({ controller }: { controller: DockController }) {
+  const spotify = useStore(controller.spotify);
+  // Пакуль цягнуць паўзунок — паказваем яго, а не тое, што прыйшло ад бота.
+  const [dragging, setDragging] = useState<number | null>(null);
+  const enabled = spotify.supportsVolume && spotify.volume !== null;
+  const volume = dragging ?? spotify.volume ?? 0;
+  const title = enabled ? t('player.volume', { n: volume }) : t('player.volume.unavailable');
+
+  const set = (value: number) => {
+    if (value > 0) volumeBeforeMute = value;
+    controller.setVolume(value);
+  };
+
+  return (
+    <div class="volume" title={title}>
+      <button
+        class="icon-btn small"
+        aria-label={volume === 0 ? t('player.unmute') : t('player.mute')}
+        title={volume === 0 ? t('player.unmute') : t('player.mute')}
+        disabled={!enabled}
+        onClick={() => set(volume === 0 ? volumeBeforeMute : 0)}
+      >
+        <VolumeIcon level={enabled ? volume : 100} />
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={volume}
+        disabled={!enabled}
+        aria-label={t('player.volume.label')}
+        style={{ '--v': `${volume}%` }}
+        onInput={(e) => {
+          const value = Number(e.currentTarget.value);
+          setDragging(value);
+          set(value);
+        }}
+        onChange={() => setDragging(null)}
+        onPointerUp={() => setDragging(null)}
+      />
+    </div>
   );
 }

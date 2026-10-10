@@ -157,6 +157,8 @@ export function createSpotifyApi(options: SpotifyApiOptions) {
     pause: () => request('PUT', '/me/player/pause'),
     next: () => request('POST', '/me/player/next'),
     previous: () => request('POST', '/me/player/previous'),
+    /** Гучнасць Spotify на прыладзе, дзе ён грае (0…100). */
+    volume: (percent: number) => request('PUT', `/me/player/volume?volume_percent=${Math.round(percent)}`),
     /** Дадаць у «Любімыя трэкі» (ADR-016: `PUT /me/library` замест выдаленага `PUT /me/tracks`). */
     saveToLibrary: (list: string[]) => request('PUT', `/me/library?uris=${uris(list)}`),
     async libraryContains(list: string[]): Promise<boolean[]> {

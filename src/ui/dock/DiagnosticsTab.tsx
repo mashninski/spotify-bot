@@ -34,6 +34,9 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
 
       <Section title={t('diag.spotify')} help={t('diag.spotify.help')}>
         <p class="small">{t('diag.spotify.requests', { n: spotify.requestsToday })}</p>
+        {spotify.status !== 'off' && (
+          <p class={`small ${spotify.windowWatch === 'ok' ? 'good' : 'muted'}`}>{t(`diag.spotify.window.${spotify.windowWatch}`)}</p>
+        )}
       </Section>
 
       <Section title={t('diag.env')} help={t('diag.env.help')}>

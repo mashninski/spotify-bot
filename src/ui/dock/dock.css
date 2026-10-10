@@ -202,6 +202,16 @@ p {
   font-size: 16px;
   font-weight: 700;
 }
+/* Новая песня з’яўляецца плаўна (ключ элемента — запіс песні). */
+.now-track {
+  animation: now-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes now-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
 .now-head {
   display: flex;
   align-items: flex-start;
@@ -484,4 +494,54 @@ select:focus {
 .periods li {
   padding: 6px 0;
   border-top: 1px solid var(--line);
+}
+
+/* Кнопкі плэера з рэгулятарам гучнасці справа (як у Spotify). */
+.controls.with-volume {
+  justify-content: flex-start;
+  align-items: center;
+}
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 80px;
+  max-width: 150px;
+  margin-left: auto;
+}
+.volume input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  outline: none;
+  background: linear-gradient(to right, var(--text) var(--v), var(--panel-2) var(--v));
+  cursor: pointer;
+}
+.volume:hover input[type='range']:not(:disabled) {
+  background: linear-gradient(to right, var(--green) var(--v), var(--panel-2) var(--v));
+}
+.volume input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.volume:hover input[type='range']:not(:disabled)::-webkit-slider-thumb,
+.volume input[type='range']:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+.volume input[type='range']:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

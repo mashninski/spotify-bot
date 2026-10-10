@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as q from '../../core/queue';
 import type { Track } from '../../core/types';
-import { applyPlayback, canSave, parseItem, parsePlayback, parseQueue } from './map';
+import { applyPlayback, canSave, optimisticSkip, parseItem, parsePlayback, parseQueue, type SpotifyPlayback } from './map';
 
 const spotifyTrack = (id: string) => ({
   type: 'track',
@@ -58,7 +58,7 @@ describe('адказы Spotify', () => {
 
 describe('стан плэера са Spotify', () => {
   it('новая песня і чарга', () => {
-    const s = applyPlayback(q.emptyPlayerState(), { isPlaying: true, progressMs: 10, track: track('a'), device: 'ПК' }, [track('b'), track('c')]);
+    const s = applyPlayback(q.emptyPlayerState(), { isPlaying: true, progressMs: 10, track: track('a'), device: 'ПК', volume: null, supportsVolume: false }, [track('b'), track('c')]);
     expect(s.current?.track.id).toBe('a');
     expect(s.isPlaying).toBe(true);
     expect(s.context.map((c) => c.track.id)).toEqual(['b', 'c']);
@@ -66,19 +66,73 @@ describe('стан плэера са Spotify', () => {
 
   it('тая ж песня — ключ не мяняецца, нік гледача захоўваецца', () => {
     const base = { ...q.emptyPlayerState(), current: { key: 'k', track: track('a'), requestedBy: 'kasia' } };
-    const s = applyPlayback(base, { isPlaying: false, progressMs: 50, track: track('a'), device: '' }, null);
+    const s = applyPlayback(base, { isPlaying: false, progressMs: 50, track: track('a'), device: '', volume: null, supportsVolume: false }, null);
     expect(s.current).toMatchObject({ key: 'k', requestedBy: 'kasia' });
     expect(s.progressMs).toBe(50);
   });
 
   it('песня змянілася на першую з чаргі, чарга не перачытвалася — яна здымаецца з чаргі', () => {
-    const base = applyPlayback(q.emptyPlayerState(), { isPlaying: true, progressMs: 0, track: track('a'), device: '' }, [track('b'), track('c')]);
-    const s = applyPlayback(base, { isPlaying: true, progressMs: 0, track: track('b'), device: '' }, null);
+    const base = applyPlayback(q.emptyPlayerState(), { isPlaying: true, progressMs: 0, track: track('a'), device: '', volume: null, supportsVolume: false }, [track('b'), track('c')]);
+    const s = applyPlayback(base, { isPlaying: true, progressMs: 0, track: track('b'), device: '', volume: null, supportsVolume: false }, null);
     expect(s.context.map((c) => c.track.id)).toEqual(['c']);
   });
 
   it('заказы гледачоў не кранаюцца', () => {
     const base = { ...q.emptyPlayerState(), requests: [{ key: 'r', track: track('r'), requestedBy: 'u' }] };
     expect(applyPlayback(base, null, []).requests).toEqual(base.requests);
+  });
+});
+
+
+const pb = (id: string, progressMs = 0): SpotifyPlayback => ({
+  isPlaying: true,
+  progressMs,
+  track: track(id),
+  device: '',
+  volume: null,
+  supportsVolume: false,
+});
+
+describe('хуткі водгук у доку', () => {
+  it('гучнасць прылады', () => {
+    expect(parsePlayback({ is_playing: true, item: spotifyTrack('a'), device: { name: 'ПК', volume_percent: 42.4, supports_volume: true } })).toMatchObject({
+      volume: 42,
+      supportsVolume: true,
+    });
+    expect(parsePlayback({ is_playing: true, item: spotifyTrack('a'), device: { name: 'Тэлефон', volume_percent: null } })).toMatchObject({
+      volume: null,
+      supportsVolume: false,
+    });
+  });
+
+  it('ключы чаргі не мяняюцца, калі чарга зрушылася (менш анімацыі)', () => {
+    const a = applyPlayback(q.emptyPlayerState(), pb('a'), [track('b'), track('c'), track('b')]);
+    expect(a.context.map((c) => c.key)).toEqual(['sp:spotify:track:b#1', 'sp:spotify:track:c#1', 'sp:spotify:track:b#2']);
+    const b = applyPlayback(a, pb('b'), [track('c'), track('b'), track('d')]);
+    expect(b.context[0].key).toBe(a.context[1].key);
+  });
+
+  it('прайграныя песні трапляюць у гісторыю', () => {
+    const a = applyPlayback(q.emptyPlayerState(), pb('a'), [track('b')]);
+    const b = applyPlayback(a, pb('b'), []);
+    expect(b.history.map((h) => h.track.id)).toEqual(['a']);
+  });
+
+  it('«наступная» адразу: першая з чаргі; «папярэдняя»: з гісторыі або нанова пасля 3 с', () => {
+    const a = applyPlayback(q.emptyPlayerState(), pb('a'), [track('b'), track('c')]);
+    const next = optimisticSkip(a, 'next');
+    expect(next.current?.track.id).toBe('b');
+    expect(next.context.map((c) => c.track.id)).toEqual(['c']);
+    expect(next.progressMs).toBe(0);
+    // Пацверджанне ад Spotify — той жа элемент, без лішняй анімацыі.
+    expect(applyPlayback(next, pb('b'), null).current?.key).toBe(next.current?.key);
+
+    const back = optimisticSkip(next, 'previous');
+    expect(back.current?.track.id).toBe('a');
+    expect(back.context.map((c) => c.track.id)).toEqual(['b', 'c']);
+
+    const restart = optimisticSkip({ ...next, progressMs: 10_000 }, 'previous');
+    expect(restart.current?.track.id).toBe('b');
+    expect(restart.progressMs).toBe(0);
   });
 });

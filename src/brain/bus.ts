@@ -52,7 +52,9 @@ export type Command =
   | { type: 'obs-disconnect' }
   /** «+»: дадаць бягучую песню ў «Любімыя трэкі» Spotify. */
   | { type: 'save-current' }
-  | { type: 'spotify-disconnect' };
+  | { type: 'spotify-disconnect' }
+  /** Гучнасць Spotify 0…100. */
+  | { type: 'volume'; value: number };
 
 /** Усё, што лідар паказвае іншым старонкам. Гісторыя песень не перадаецца — яна патрэбна толькі лідару. */
 export interface BrainSnapshot {
@@ -100,6 +102,9 @@ export function parseCommand(raw: unknown): Command | null {
   if (SIMPLE_COMMANDS.has(raw.type)) return { type: raw.type } as Command;
   if ((raw.type === 'play-now' || raw.type === 'remove') && typeof raw.key === 'string') {
     return { type: raw.type, key: raw.key };
+  }
+  if (raw.type === 'volume' && typeof raw.value === 'number' && Number.isFinite(raw.value)) {
+    return { type: 'volume', value: Math.max(0, Math.min(100, Math.round(raw.value))) };
   }
   return null;
 }

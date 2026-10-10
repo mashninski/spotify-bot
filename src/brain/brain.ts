@@ -17,7 +17,8 @@ import { EventSubscription, type InputVolumeMetersEvent } from '../obs/protocol'
 import { createMockProvider, MOCK_REQUEST_TRACKS, MOCK_VIEWERS, type MusicProvider } from '../providers/spotify';
 import { createSpotifyApi } from '../providers/spotify/api';
 import { clearTokens, hasTokens, saveLoginResult, type FetchLike } from '../providers/spotify/auth';
-import { applyPlayback, canSave } from '../providers/spotify/map';
+import { applyPlayback, canSave, optimisticSkip } from '../providers/spotify/map';
+import { createSpotifyWindowReader } from '../obs/spotify-window';
 import { createRequestCounter, createSpotifySync, initialSpotifyInfo, type SpotifyInfo } from '../providers/spotify/sync';
 import { createMockRequestSource, type SongRequest } from '../sources/twitch';
 import type { ChannelInfo, Command, Notice, ObsInfo } from './bus';
@@ -31,6 +32,10 @@ const TICK_MS = 250;
 const SIMULATED_AUDIO_MS = 50;
 /** Як часта захоўваць стан плэера ў localStorage (і заўсёды — пры спыненні). */
 const PERSIST_MS = 1000;
+/** Як часта правяраць загаловак акна Spotify праз OBS (бясплатна — без запытаў да Spotify). */
+const WINDOW_CHECK_MS = 1000;
+/** Калі ў OBS няма крыніцы са спісам акон — правяраць радзей. */
+const WINDOW_CHECK_IDLE_MS = 10_000;
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -72,6 +77,11 @@ export function createBrain(options: BrainOptions) {
   const envelope = createEnvelopeFactory(options.id);
 
   let obs: ObsClient | null = null;
+  let windowReader: ReturnType<typeof createSpotifyWindowReader> | null = null;
+  let windowBusy = false;
+  let nextWindowCheckAt = 0;
+  /** Апошні вядомы стан акна Spotify (`null` — яшчэ не правяралі). */
+  let lastWindowKey: string | null = null;
   let keyCounter = 0;
   let lastOverlayJson = '';
   let lastLevel = -1;
@@ -197,6 +207,7 @@ export function createBrain(options: BrainOptions) {
     if (spotifyMode) {
       player.set((s) => q.advanceProgress(s, delta));
       spotify.tick(now);
+      checkSpotifyWindow(now);
     } else {
       player.set((s) => q.tick(s, delta));
       if (options.demo && player.get().context.length < CONTEXT_MIN) void refillContext();
@@ -209,6 +220,32 @@ export function createBrain(options: BrainOptions) {
       updateChannel();
     }
     if (now - lastPersistAt >= PERSIST_MS) persist();
+  }
+
+  /**
+   * Змена загалоўка акна Spotify (іншая песня, паўза, Spotify адкрыты/закрыты) — сігнал апытаць Spotify адразу,
+   * не чакаючы планавага апытання. Калі ў OBS няма патрэбнай крыніцы — проста апытанне па раскладзе.
+   */
+  function checkSpotifyWindow(now: number): void {
+    if (!windowReader || windowBusy || now < nextWindowCheckAt) return;
+    windowBusy = true;
+    const reader = windowReader;
+    void reader
+      .read()
+      .then((result) => {
+        if (reader !== windowReader || !spotifyMode) return;
+        const key = `${result.status}|${result.title ?? ''}`;
+        if (lastWindowKey !== null && key !== lastWindowKey) spotify.nudge();
+        lastWindowKey = key;
+        if (stores.spotify.get().windowWatch !== result.status) stores.spotify.set((s) => ({ ...s, windowWatch: result.status }));
+        nextWindowCheckAt = Date.now() + (result.status === 'no-source' ? WINDOW_CHECK_IDLE_MS : WINDOW_CHECK_MS);
+      })
+      .catch(() => {
+        nextWindowCheckAt = Date.now() + WINDOW_CHECK_IDLE_MS;
+      })
+      .finally(() => {
+        windowBusy = false;
+      });
   }
 
   function handleRequest(request: SongRequest): void {
@@ -251,12 +288,17 @@ export function createBrain(options: BrainOptions) {
       stores.obs.set({ status, detail, version: client.obsWebSocketVersion });
       if (status === 'connected') {
         if (!settings.get().obs.autoConnect) updateSettings((s) => ({ ...s, obs: { ...s.obs, autoConnect: true } }));
+        windowReader = createSpotifyWindowReader(client);
+        lastWindowKey = null;
+        nextWindowCheckAt = 0;
         void sender.attach(client, envelope({ type: 'ping', at: Date.now() })).then(() => {
           if (obs !== client) return;
           updateChannel();
           sendState(true);
         });
       } else {
+        windowReader = null;
+        stores.spotify.set((s) => (s.windowWatch === 'unknown' ? s : { ...s, windowWatch: 'unknown' }));
         sender.detach();
         updateChannel();
       }
@@ -276,6 +318,7 @@ export function createBrain(options: BrainOptions) {
   function disconnectObs(): void {
     obs?.disconnect();
     obs = null;
+    windowReader = null;
     sender.detach();
     updateChannel();
     stores.obs.set({ status: 'disconnected', detail: '', version: '' });
@@ -307,11 +350,18 @@ export function createBrain(options: BrainOptions) {
         return;
       }
       case 'next':
-        if (spotifyMode) return void spotify.command('next');
-        return player.set(q.skipNext);
-      case 'previous':
-        if (spotifyMode) return void spotify.command('previous');
-        return player.set(q.skipPrevious);
+      case 'previous': {
+        if (!spotifyMode) return player.set(command.type === 'next' ? q.skipNext : q.skipPrevious);
+        // Паказваем вынік адразу (наступная — з чаргі, папярэдняя — з гісторыі), Spotify пацвердзіць або выправіць.
+        player.set((s) => optimisticSkip(s, command.type));
+        void spotify.command(command.type).then((ok) => {
+          if (!ok) spotify.nudge();
+        });
+        return;
+      }
+      case 'volume':
+        if (spotifyMode) spotify.setVolume(command.value);
+        return;
       case 'play-now':
         // Заказы ў Spotify — Этап 3б (ADR-007).
         if (spotifyMode) return;

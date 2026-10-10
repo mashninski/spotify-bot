@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { BrainNode } from '../../brain/node';
 import { safeLocalStorage } from '../../core/settings';
-import type { OverlayState } from '../../core/types';
+import type { OverlayState, OverlayTrack } from '../../core/types';
 import { formatDuration, t } from '../../i18n';
 import { simulatedLevel } from '../../obs/audio';
 import { listenForBrain, type ReceiveChannel } from '../../obs/channel';
@@ -84,17 +84,7 @@ export function Overlay({ options, node }: { options: OverlayOptions; node: Brai
             <div class="logo">
               <SpotifyLogo size={30} />
             </div>
-            <div class="meta" key={current.key}>
-              <div class="title">{current.title}</div>
-              <div class="artist">
-                {current.artist}
-                {current.requestedBy && (
-                  <span class="by">
-                    <UserIcon /> {current.requestedBy}
-                  </span>
-                )}
-              </div>
-            </div>
+            <TrackMeta current={current} />
             <Waveline levelRef={levelRef} playing={state.isPlaying} width={112} height={36} />
           </div>
           {state.upcoming.length > 0 && (
@@ -148,5 +138,49 @@ function BrainInfo({ node }: { node: BrainNode }) {
       </div>
       {conflicts > 0 && <div>{t('overlay.debug.conflicts', { n: conflicts })}</div>}
     </>
+  );
+}
+
+/** Колькі старая песня плаўна знікае (тое ж, што `track-out` у overlay.css). */
+const LEAVE_MS = 450;
+
+/**
+ * Назва і выканаўца. Пры змене песні старая плаўна сыходзіць уверх, а новая ўзнікае знізу —
+ * абедзве некаторы час на экране адна над адной, без рэзкага пераскоку.
+ */
+function TrackMeta({ current }: { current: OverlayTrack }) {
+  const previous = useRef<OverlayTrack>(current);
+  const [leaving, setLeaving] = useState<OverlayTrack | null>(null);
+
+  useEffect(() => {
+    const old = previous.current;
+    previous.current = current;
+    if (old.key === current.key) return;
+    setLeaving(old);
+    const id = setTimeout(() => setLeaving(null), LEAVE_MS);
+    return () => clearTimeout(id);
+  }, [current.key]);
+
+  return (
+    <div class="meta-box">
+      {leaving && <MetaLines track={leaving} class="meta leaving" key={`out-${leaving.key}`} />}
+      <MetaLines track={current} class="meta" key={current.key} />
+    </div>
+  );
+}
+
+function MetaLines({ track, class: className }: { track: OverlayTrack; class: string }) {
+  return (
+    <div class={className}>
+      <div class="title">{track.title}</div>
+      <div class="artist">
+        {track.artist}
+        {track.requestedBy && (
+          <span class="by">
+            <UserIcon /> {track.requestedBy}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

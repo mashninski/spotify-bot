@@ -115,3 +115,34 @@ describe('бот са Spotify', () => {
     await vi.waitFor(() => expect(overlay.player.get().current?.track.id).toBe('z'), WAIT);
   });
 });
+
+describe('хуткі водгук у OBS', () => {
+  it('«Наступная» з дока: новая песня ў доку адразу, нават калі Spotify адказвае са спазненнем', async () => {
+    const { make, spotify } = setup();
+    const overlay = make('overlay');
+    await vi.waitFor(() => expect(overlay.isLeader()).toBe(true), WAIT);
+    const dock = make('dock');
+    await vi.waitFor(() => expect(dock.player.get().context).toHaveLength(3), WAIT);
+    spotify.state.lagPolls = 3;
+    const started = Date.now();
+    dock.next();
+    await vi.waitFor(() => expect(dock.player.get().current?.track.id).toBe('b'), WAIT);
+    expect(Date.now() - started).toBeLessThan(300);
+    // Пакуль Spotify «думае», док не скача назад на «a».
+    for (let i = 0; i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      expect(dock.player.get().current?.track.id).toBe('b');
+    }
+  });
+
+  it('гучнасць з дока трапляе ў Spotify', async () => {
+    const { make, spotify } = setup();
+    const overlay = make('overlay');
+    await vi.waitFor(() => expect(overlay.isLeader()).toBe(true), WAIT);
+    const dock = make('dock');
+    await vi.waitFor(() => expect(dock.spotify.get().volume).toBe(60), WAIT);
+    dock.setVolume(25);
+    await vi.waitFor(() => expect(spotify.state.volume).toBe(25), WAIT);
+    await vi.waitFor(() => expect(dock.spotify.get().volume).toBe(25), WAIT);
+  });
+});

@@ -91,3 +91,20 @@ export function CheckCircleIcon({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+/** Гучнасць: дынамік з хвалямі (колькасць хваль залежыць ад гучнасці, як у Spotify). */
+export function VolumeIcon({ size = 18, level = 100 }: IconProps & { level?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" />
+      {level === 0 ? (
+        <path d="M15.5 9.5l5 5M20.5 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      ) : (
+        <>
+          <path d="M15 9.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          {level > 50 && <path d="M17.6 6.8a7.5 7.5 0 0 1 0 10.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />}
+        </>
+      )}
+    </svg>
+  );
+}

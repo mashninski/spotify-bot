@@ -12,6 +12,8 @@ const playback = (isPlaying: boolean, progressMs: number, durationMs = 180_000):
   progressMs,
   track: track(durationMs),
   device: 'ПК',
+  volume: 50,
+  supportsVolume: true,
 });
 
 describe('інтэрвалы апытання Spotify', () => {
@@ -24,7 +26,7 @@ describe('інтэрвалы апытання Spotify', () => {
   it('паўза і «нідзе не адкрыты» — радзей', () => {
     expect(pollDelay(playback(false, 10_000))).toBe(POLL.paused);
     expect(pollDelay(null)).toBe(POLL.idle);
-    expect(pollDelay({ isPlaying: false, progressMs: 0, track: null, device: '' })).toBe(POLL.idle);
+    expect(pollDelay({ isPlaying: false, progressMs: 0, track: null, device: '', volume: null, supportsVolume: false })).toBe(POLL.idle);
   });
 
   it('за гадзіну музыкі — не больш за ~600 апытанняў стану', () => {
@@ -182,6 +184,99 @@ describe('сінхранізацыя са Spotify', () => {
     expect(t.fake.calls).toEqual([]);
     await t.advance(1);
     expect(t.info().status).toBe('ok');
+  });
+});
+
+describe('хуткі водгук пасля кнопак і гучнасць', () => {
+  it('Spotify яшчэ не пераключыўся — старыя адказы не паказваюцца, правяраем часта, пакуль не пацвердзіць', async () => {
+    const t = setup();
+    t.sync.start();
+    await t.advance(0);
+    t.fake.state.lagPolls = 2; // два апытанні запар Spotify адкажа старой песняй
+    const shown = t.updates.length;
+    await t.sync.command('next');
+    await t.advance(POLL.afterCommand);
+    await t.advance(POLL.confirm);
+    expect(t.updates.length).toBe(shown); // стары стан «a» не паказаны
+    await t.advance(POLL.confirm);
+    expect(t.updates.at(-1)?.playback?.track?.id).toBe('b');
+  });
+
+  it('паўза пацверджана — далей звычайны інтэрвал', async () => {
+    const t = setup();
+    t.sync.start();
+    await t.advance(0);
+    await t.sync.command('pause');
+    await t.advance(POLL.afterCommand);
+    expect(t.updates.at(-1)?.playback?.isPlaying).toBe(false);
+    t.fake.calls.length = 0;
+    await t.advance(POLL.confirm);
+    expect(t.fake.calls).toEqual([]);
+  });
+
+  it('Spotify так і не пацвердзіў — праз 4 с паказваем тое, што ёсць', async () => {
+    const t = setup();
+    t.sync.start();
+    await t.advance(0);
+    t.fake.state.lagPolls = 100;
+    await t.sync.command('next');
+    await t.advance(POLL.afterCommand);
+    for (let i = 0; i < 12; i++) await t.advance(POLL.confirm);
+    expect(t.updates.at(-1)?.playback?.track?.id).toBe('a');
+    expect(t.fake.calls.filter((c) => c === 'GET /me/player').length).toBeLessThan(16);
+  });
+
+  it('сігнал «нешта змянілася» (загаловак акна) — апытанне праз 250 мс замест 6 с', async () => {
+    const t = setup();
+    t.sync.start();
+    await t.advance(0);
+    t.fake.state.current = fakeTrack('z');
+    t.sync.nudge();
+    await t.advance(POLL.nudge);
+    expect(t.updates.at(-1)?.playback?.track?.id).toBe('z');
+  });
+
+  it('пакуль Spotify абмежаваў запыты, сігнал не прыспешвае апытанне', async () => {
+    const t = setup();
+    t.sync.start();
+    await t.advance(0);
+    t.fake.state.nextReply = { status: 429, headers: { 'Retry-After': '60' }, body: { error: { status: 429, reason: 'QUOTA_EXCEEDED' } } };
+    await t.advance(POLL.playing);
+    t.fake.calls.length = 0;
+    t.sync.nudge();
+    await t.advance(POLL.nudge);
+    expect(t.fake.calls).toEqual([]);
+  });
+
+  it('гучнасць: адразу ў стане, у Spotify — не часцей за раз у 300 мс, апошняе значэнне не губляецца', async () => {
+    const t = setup();
+    t.sync.start();
+    await t.advance(0);
+    expect(t.info()).toMatchObject({ volume: 60, supportsVolume: true });
+    t.fake.calls.length = 0;
+    t.sync.setVolume(10);
+    await t.settle();
+    t.sync.setVolume(20);
+    t.sync.setVolume(30);
+    expect(t.info().volume).toBe(30);
+    await t.advance(100);
+    expect(t.fake.calls.filter((c) => c === 'PUT /me/player/volume')).toHaveLength(1);
+    await t.advance(POLL.volumeThrottle);
+    expect(t.fake.calls.filter((c) => c === 'PUT /me/player/volume')).toHaveLength(2);
+    expect(t.fake.state.volume).toBe(30);
+  });
+
+  it('пасля змены гучнасці старое значэнне з апытання не вяртае паўзунок назад', async () => {
+    const t = setup();
+    t.sync.start();
+    await t.advance(0);
+    t.sync.setVolume(15);
+    await t.settle();
+    t.fake.state.volume = 60; // Spotify яшчэ не паспеў
+    t.fake.state.current = fakeTrack('q');
+    t.sync.nudge();
+    await t.advance(POLL.nudge);
+    expect(t.info().volume).toBe(15);
   });
 });
 
