@@ -76,7 +76,7 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
       )}
 
       <Section title={t('diag.obs')} help={t('diag.obs.help')}>
-        <Row label={t('diag.obs.page')}>{env.inObs ? `OBS ${env.version}` : t('diag.obs.notObs')}</Row>
+        <Row label={t('diag.obs.page')}>{env.inObs ? env.version : t('diag.obs.notObs')}</Row>
         <Row label="obs-websocket" tone={obs.version ? '' : 'muted'}>
           {obs.version || t('diag.none')}
         </Row>
