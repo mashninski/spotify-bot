@@ -2,6 +2,8 @@
 // старую версію. Док і оверлэй раз у хвіліну чытаюць version.json (без кэша) і, калі выйшла новая версія,
 // загружаюцца нанова — тады, калі гэта нікому не перашкодзіць (`canReload`).
 
+import { busy } from '../../core/busy';
+
 const CHECK_MS = 60_000;
 
 /** Пачаць сачыць за новай версіяй. `canReload` — ці можна перазагрузіць старонку зараз. */
@@ -20,7 +22,8 @@ export function watchForUpdates(canReload: () => boolean): () => void {
     }
   };
   const tryReload = () => {
-    if (!latest || latest === __APP_VERSION__ || !canReload()) return;
+    // Не пасярэдзіне абнаўлення ўваходу ў Twitch / Spotify — інакш уваход прападзе.
+    if (!latest || latest === __APP_VERSION__ || busy() || !canReload()) return;
     // Новы адрас (?v=…) — каб браўзер не ўзяў старую старонку з кэша.
     const url = new URL(location.href);
     url.searchParams.set('v', latest);

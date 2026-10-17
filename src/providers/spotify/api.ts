@@ -1,6 +1,7 @@
 // Кліент Spotify Web API (ADR-016). Выкарыстоўвае толькі лідар (ADR-015): ён жа абнаўляе токены.
 // Токены кожны раз чытаюцца з localStorage — так лідар адразу бачыць новы ўваход са старонкі вяртання.
 
+import { guarded } from '../../core/busy';
 import {
   clearTokens,
   loadTokens,
@@ -92,7 +93,7 @@ export function createSpotifyApi(options: SpotifyApiOptions) {
     if (!tokens) throw new SpotifyApiError('auth', 0, 'no-tokens');
     if (!force && !needsRefresh(tokens, now())) return tokens.accessToken;
     if (!refreshing) {
-      refreshing = refresh(tokens).finally(() => {
+      refreshing = guarded(() => refresh(tokens)).finally(() => {
         refreshing = null;
       });
     }

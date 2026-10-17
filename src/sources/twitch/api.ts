@@ -1,6 +1,7 @@
 // Кліент Twitch Helix API (ADR-018). Выкарыстоўвае толькі лідар (ADR-015): ён жа абнаўляе токены.
 // Токены кожны раз чытаюцца з localStorage — лідар адразу бачыць новы ўваход з дока.
 
+import { guarded } from '../../core/busy';
 import {
   clearTokens,
   loadTokens,
@@ -140,7 +141,8 @@ export function createTwitchApi(options: TwitchApiOptions) {
     const current = loadTokens(storage);
     if (!current) throw new TwitchApiError('auth', 0, 'no-tokens');
     if (!force && !needsRefresh(current, now())) return current;
-    refreshing ??= refresh(current).finally(() => {
+    // Пакуль ідзе абнаўленне, старонка сама не перазагружаецца (refresh token Twitch аднаразовы).
+    refreshing ??= guarded(() => refresh(current)).finally(() => {
       refreshing = null;
     });
     return refreshing;
