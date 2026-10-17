@@ -39,11 +39,29 @@ export type RefundReason =
   | 'offline'
   | 'empty'
   /** Песня знікла з чаргі другі раз, не пачаўшы граць. */
-  | 'lost';
+  | 'lost'
+  // Відэа YouTube (ADR-020):
+  /** Ва ўзнагародзе відэа — не спасылка на відэа YouTube. */
+  | 'not-youtube'
+  /** Ва ўзнагародзе песні — спасылка на YouTube. */
+  | 'youtube-link'
+  | 'video-not-found'
+  /** Відэа нельга ўбудаваць (забарона аўтара, узроставае абмежаванне). */
+  | 'not-embeddable'
+  /** Трансляцыя або прэм’ера. */
+  | 'live'
+  | 'youtube-failed'
+  /** Відэа так і не паказалася ў оверлэі. */
+  | 'video-error';
+
+/** Якая ўзнагарода: песня або відэа YouTube (ADR-020). */
+export type RewardKind = 'song' | 'video';
 
 export interface RedemptionRecord {
   id: string;
   rewardId: string;
+  /** Узнагарода, за якую замова (старыя запісы без поля — песня). */
+  kind?: RewardKind;
   /** Нік гледача (як у чаце). */
   user: string;
   query: string;
@@ -118,7 +136,7 @@ function patch(log: RedemptionLog, id: string, change: Partial<RedemptionRecord>
 /** Новая падзея ад Twitch. `null` — гэты заказ ужо вядомы (паўторная дастаўка або даганялка). */
 export function track(
   log: RedemptionLog,
-  r: { id: string; rewardId: string; user: string; query: string; redeemedAt: number },
+  r: { id: string; rewardId: string; kind?: RewardKind; user: string; query: string; redeemedAt: number },
   now: number,
 ): RedemptionLog | null {
   if (log.records[r.id]) return null;
@@ -219,7 +237,9 @@ export function reconcile(log: RedemptionLog, state: PlayerState, now: number): 
   for (const r of Object.values(log.records)) {
     if (r.stage !== 'queued') continue;
     const found = findItem(state, r.id);
-    if (found?.where === 'requests') {
+    // Відэа стала бягучым, але плэер у оверлэі яшчэ не пачаў яго паказваць (ADR-020) — пакуль як у чарзе.
+    const waitingVideo = found?.where === 'current' && found.item.track.source === 'youtube' && state.video?.started !== true;
+    if (found?.where === 'requests' || waitingVideo) {
       if (r.playingSince !== undefined) next = patch(next, r.id, { playingSince: undefined }, now);
     } else if (found?.where === 'current') {
       if (r.playingSince === undefined) next = patch(next, r.id, { playingSince: now }, now);

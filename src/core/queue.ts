@@ -119,11 +119,15 @@ export function tick(state: PlayerState, deltaMs: number): PlayerState {
 function toOverlayTrack(item: QueueItem): OverlayTrack {
   const t: OverlayTrack = { key: item.key, title: item.track.title, artist: item.track.artist };
   if (item.requestedBy) t.requestedBy = item.requestedBy;
+  if (item.track.source === 'youtube') t.source = 'youtube';
   return t;
 }
 
-/** Мінімальны стан для оверлея: бягучая песня і 3 наступныя. */
-export function toOverlayState(state: PlayerState, upcomingCount = 3): OverlayState {
+/** Колькі наступных паказвае оверлэй (ADR-020: 5 замест 3). */
+export const OVERLAY_UPCOMING = 5;
+
+/** Мінімальны стан для оверлея: бягучая песня і 5 наступных. */
+export function toOverlayState(state: PlayerState, upcomingCount = OVERLAY_UPCOMING): OverlayState {
   return {
     current: state.current ? toOverlayTrack(state.current) : null,
     isPlaying: state.isPlaying,

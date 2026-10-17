@@ -35,6 +35,7 @@ function parseTrack(raw: unknown): OverlayTrack | null {
   if (!isObject(raw) || !isString(raw.key) || !isString(raw.title) || !isString(raw.artist)) return null;
   const t: OverlayTrack = { key: raw.key, title: raw.title, artist: raw.artist };
   if (isString(raw.requestedBy) && raw.requestedBy) t.requestedBy = raw.requestedBy;
+  if (raw.source === 'youtube') t.source = 'youtube';
   return t;
 }
 

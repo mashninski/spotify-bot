@@ -7,7 +7,14 @@ export interface SongRequest {
   query: string;
   /** Ідэнтыфікатар выкупу ўзнагароды Twitch (каб вярнуць баллы). У тэставым рэжыме адсутнічае. */
   redemptionId?: string;
+  /**
+   * Што замовілі: песню (узнагарода «Замовіць песню») або відэа YouTube (ADR-020). Без поля (тэставая замова) —
+   * відэа, калі ў тэксце спасылка на YouTube.
+   */
+  kind?: RequestKind;
 }
+
+export type RequestKind = 'song' | 'video';
 
 export interface RequestSource {
   readonly id: string;

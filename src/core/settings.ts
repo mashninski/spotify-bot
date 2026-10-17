@@ -23,7 +23,17 @@ export interface Settings {
     /** Client ID нашага Twitch Application тыпу Public (ADR-004, ADR-018). Не сакрэт; на Этапе 5 будзе ўбудаваны. */
     clientId: string;
   };
+  /** Відэа YouTube (ADR-020). */
+  video: {
+    /** Гучнасць плэера ў оверлэі, 0…100. */
+    volume: number;
+    /** Крыніца OBS з гукам відэа для хвалі (Browser Source оверлэя); пуста — знайсці самому. */
+    audioSource: string;
+  };
 }
+
+/** Гучнасць відэа па змаўчанні: ціхэй за звычайную гучнасць Spotify (ADR-020). */
+export const DEFAULT_VIDEO_VOLUME = 40;
 
 export const SETTINGS_KEY = 'spotify-bot:settings:v1';
 
@@ -34,6 +44,7 @@ export function defaultSettings(): Settings {
     rules: { ...DEFAULT_RULES },
     spotify: { clientId: '' },
     twitch: { clientId: '' },
+    video: { volume: DEFAULT_VIDEO_VOLUME, audioSource: '' },
   };
 }
 
@@ -57,6 +68,8 @@ export function loadSettings(storage: StorageLike | null): Settings {
   const rules = typeof r.rules === 'object' && r.rules ? r.rules : {};
   const spotify = typeof r.spotify === 'object' && r.spotify ? r.spotify : {};
   const twitch = typeof r.twitch === 'object' && r.twitch ? r.twitch : {};
+  const video = typeof r.video === 'object' && r.video ? r.video : {};
+  const volume = typeof video.volume === 'number' && video.volume >= 0 && video.volume <= 100 ? Math.round(video.volume) : d.video.volume;
   return {
     obs: {
       url: pick(obs.url, d.obs.url) || d.obs.url,
@@ -69,12 +82,18 @@ export function loadSettings(storage: StorageLike | null): Settings {
       maxDurationMin: positiveInt(rules.maxDurationMin, d.rules.maxDurationMin),
       maxPerUser: positiveInt(rules.maxPerUser, d.rules.maxPerUser),
       allowExplicit: pick(rules.allowExplicit, d.rules.allowExplicit),
+      videoPrice: positiveInt(rules.videoPrice, d.rules.videoPrice),
+      videoMaxDurationMin: positiveInt(rules.videoMaxDurationMin, d.rules.videoMaxDurationMin),
     },
     spotify: {
       clientId: pick(spotify.clientId, d.spotify.clientId).trim(),
     },
     twitch: {
       clientId: pick(twitch.clientId, d.twitch.clientId).trim(),
+    },
+    video: {
+      volume,
+      audioSource: pick(video.audioSource, d.video.audioSource),
     },
   };
 }

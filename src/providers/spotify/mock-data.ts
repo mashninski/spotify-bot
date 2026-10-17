@@ -36,9 +36,12 @@ export const SPOTIFY_TEST_QUERIES = [
   'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
   'NaviBand Гісторыя майго жыцця',
   'Daft Punk Get Lucky',
+  // Відэа YouTube (ADR-020): правяраецца праз oEmbed і схаваны плэер, грае ў оверлэі.
+  'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   'N.R.M. Тры чарапахі',
   'spotify:track:4u7EnebtmKWzUH433cf5Qv',
   "Queen Don't Stop Me Now",
+  'https://youtu.be/9bZkp7q19f0',
   'Rush 2112',
   'Molchat Doma Судно',
 ];

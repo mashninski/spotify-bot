@@ -175,6 +175,10 @@ export function createFakeSpotify() {
       state.playing = true;
       return { status: 200 };
     }
+    if (method === 'PUT' && p === '/me/player/seek') {
+      state.progressMs = Number(query.get('position_ms') ?? 0);
+      return { status: 200 };
+    }
     if (method === 'POST' && p === '/me/player/queue') {
       const id = (query.get('uri') ?? '').replace('spotify:track:', '');
       const track = [...state.catalog, ...state.queue].find((t) => t.id === id);

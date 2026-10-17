@@ -157,6 +157,8 @@ export function createSpotifyApi(options: SpotifyApiOptions) {
     pause: () => request('PUT', '/me/player/pause'),
     next: () => request('POST', '/me/player/next'),
     previous: () => request('POST', '/me/player/previous'),
+    /** Перамотка бягучай песні (пасля відэа — з пачатку, ADR-020). */
+    seek: (positionMs: number) => request('PUT', `/me/player/seek?position_ms=${Math.max(0, Math.round(positionMs))}`),
     /** Гучнасць Spotify на прыладзе, дзе ён грае (0…100). */
     volume: (percent: number) => request('PUT', `/me/player/volume?volume_percent=${Math.round(percent)}`),
     /** Адзін трэк па id (Этап 3б; пакетны `GET /tracks?ids=` выдалены ў лютым 2026). */
