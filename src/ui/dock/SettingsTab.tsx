@@ -154,6 +154,17 @@ function VideoSection({ controller }: { controller: DockController }) {
         </select>
       </label>
       {status && <p class={`small ${tone}`}>{status}</p>}
+      <div class="field">
+        <span>{t('settings.video.account')}</span>
+        <div class="row-actions">
+          <button class="btn" onClick={controller.signInYouTube}>
+            {t('settings.video.signIn')}
+          </button>
+        </div>
+        <p class={`small ${youtube.ads ? 'bad' : 'muted'}`}>
+          {youtube.ads ? t('settings.video.adsSeen', { n: youtube.ads }) : t('settings.video.signIn.hint')}
+        </p>
+      </div>
       <label class="check">
         <input type="checkbox" checked={settings.video.skipAds} onChange={(e) => setVideo({ skipAds: e.currentTarget.checked })} />
         <span>{t('settings.video.skipAds')}</span>

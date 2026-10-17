@@ -1,7 +1,7 @@
 // Спасылкі YouTube і праверка відэа (ADR-020).
 
 import { describe, expect, it } from 'vitest';
-import { mentionsYouTube, parseYouTubeLink } from './link';
+import { mentionsYouTube, parseYouTubeLink, youtubeSignInUrl } from './link';
 import { findVideo, type FetchLike, type ProbeResult } from './lookup';
 
 describe('спасылкі YouTube', () => {
@@ -35,6 +35,18 @@ describe('спасылкі YouTube', () => {
     ]) {
       expect(parseYouTubeLink(text), text).toBeNull();
     }
+  });
+
+  it('уваход у YouTube з дока: Google → youtube.com → назад у док', () => {
+    const back = 'https://mashninski.github.io/spotify-bot/dock.html#settings';
+    const url = new URL(youtubeSignInUrl(back));
+    expect(url.origin + url.pathname).toBe('https://accounts.google.com/ServiceLogin');
+    expect(url.searchParams.get('service')).toBe('youtube');
+    const signin = new URL(url.searchParams.get('continue')!);
+    expect(signin.origin + signin.pathname).toBe('https://www.youtube.com/signin');
+    const next = new URL(signin.searchParams.get('next')!, 'https://www.youtube.com');
+    expect(next.pathname).toBe('/redirect');
+    expect(next.searchParams.get('q')).toBe(back);
   });
 
   it('любая згадка YouTube (для падказкі ва ўзнагародзе песні)', () => {

@@ -7,6 +7,7 @@ import { isTwitchClientId, startDeviceLogin, type DeviceCode } from '../../sourc
 import { createBrainNode } from '../../brain/node';
 import { redirectUriFor, startLogin } from '../../providers/spotify/auth';
 import { DIAG_MARKER_KEY, writeJson } from '../shared/diag';
+import { youtubeSignInUrl } from '../../youtube/link';
 
 export function createDockController() {
   const storage = safeLocalStorage();
@@ -17,6 +18,13 @@ export function createDockController() {
     const clientId = node.settings.get().spotify.clientId;
     if (!isClientId(clientId)) return;
     location.href = await startLogin(storage, clientId, redirectUriFor(location.href));
+  }
+
+  /** Уваход у YouTube усёй старонкай дока; Google і YouTube вернуць на «Налады» (ADR-020). */
+  function signInYouTube(): void {
+    const back = new URL(location.href);
+    back.hash = 'settings';
+    location.href = youtubeSignInUrl(back.toString());
   }
 
   /** Уваход у Twitch (Device Code Flow): док паказвае код, стрымер пацвярджае яго на twitch.tv у сваім браўзеры. */
@@ -69,6 +77,7 @@ export function createDockController() {
     },
 
     connectSpotify,
+    signInYouTube,
     twitchLogin,
     connectTwitch,
     cancelTwitchLogin,

@@ -38,3 +38,14 @@ export function mentionsYouTube(text: string): boolean {
 
 /** Спасылка на відэа для паведамленняў і oEmbed. */
 export const watchUrl = (videoId: string) => `https://www.youtube.com/watch?v=${videoId}`;
+
+/**
+ * Уваход у акаўнт YouTube (Google) усёй старонкай дока — як уваход у Spotify (ADR-016, ADR-020). Пасля ўваходу
+ * Google вяртае на youtube.com, а `/redirect` YouTube — назад у док (YouTube пытае «Перейти на сайт?»).
+ * Уваход застаецца ў браўзеры OBS: з акаўнтам Premium відэа ў оверлэі граюць без рэкламы.
+ */
+export function youtubeSignInUrl(returnTo: string): string {
+  const next = `/redirect?q=${encodeURIComponent(returnTo)}`;
+  const signin = `https://www.youtube.com/signin?action_handle_signin=true&app=desktop&next=${encodeURIComponent(next)}`;
+  return `https://accounts.google.com/ServiceLogin?service=youtube&passive=true&continue=${encodeURIComponent(signin)}`;
+}
