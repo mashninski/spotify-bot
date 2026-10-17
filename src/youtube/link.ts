@@ -41,11 +41,11 @@ export const watchUrl = (videoId: string) => `https://www.youtube.com/watch?v=${
 
 /**
  * Уваход у акаўнт YouTube (Google) усёй старонкай дока — як уваход у Spotify (ADR-016, ADR-020). Пасля ўваходу
- * Google вяртае на youtube.com, а `/redirect` YouTube — назад у док (YouTube пытае «Перейти на сайт?»).
+ * Google адразу адкрывае `youtube.com/redirect` — YouTube пытае «Перайсці на сайт?» і вяртае ў док.
+ * Праз `youtube.com/signin` нельга: ён адхіляе `/redirect` («Недапушчальны параметр пераадрасацыі», праверана 2026-10-17).
  * Уваход застаецца ў браўзеры OBS: з акаўнтам Premium відэа ў оверлэі граюць без рэкламы.
  */
 export function youtubeSignInUrl(returnTo: string): string {
-  const next = `/redirect?q=${encodeURIComponent(returnTo)}`;
-  const signin = `https://www.youtube.com/signin?action_handle_signin=true&app=desktop&next=${encodeURIComponent(next)}`;
-  return `https://accounts.google.com/ServiceLogin?service=youtube&passive=true&continue=${encodeURIComponent(signin)}`;
+  const back = `https://www.youtube.com/redirect?q=${encodeURIComponent(returnTo)}`;
+  return `https://accounts.google.com/ServiceLogin?service=youtube&continue=${encodeURIComponent(back)}`;
 }

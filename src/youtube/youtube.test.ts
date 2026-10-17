@@ -42,10 +42,8 @@ describe('спасылкі YouTube', () => {
     const url = new URL(youtubeSignInUrl(back));
     expect(url.origin + url.pathname).toBe('https://accounts.google.com/ServiceLogin');
     expect(url.searchParams.get('service')).toBe('youtube');
-    const signin = new URL(url.searchParams.get('continue')!);
-    expect(signin.origin + signin.pathname).toBe('https://www.youtube.com/signin');
-    const next = new URL(signin.searchParams.get('next')!, 'https://www.youtube.com');
-    expect(next.pathname).toBe('/redirect');
+    const next = new URL(url.searchParams.get('continue')!);
+    expect(next.origin + next.pathname).toBe('https://www.youtube.com/redirect');
     expect(next.searchParams.get('q')).toBe(back);
   });
 
