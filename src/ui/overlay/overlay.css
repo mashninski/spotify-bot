@@ -360,3 +360,34 @@ body {
   white-space: nowrap;
   will-change: transform;
 }
+
+/* Наш значок на месцы паўзы YouTube у цэнтры відэа (першыя секунды пасля старту, перамоткі, працягу і на паўзе). */
+.video-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 80px;
+  height: 80px;
+  margin: -40px 0 0 -40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: rgba(18, 18, 18, 0.62);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transform: scale(0.92);
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+  pointer-events: none;
+}
+
+.video-badge.shown {
+  opacity: 1;
+  transform: none;
+  /* З’яўляецца адразу: паўза YouTube відаць з першага кадра. */
+  transition: none;
+}

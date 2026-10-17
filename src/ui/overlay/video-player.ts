@@ -43,12 +43,12 @@ const MIRROR_SEEK_EVERY_MS = 30_000;
 /** Калі відэа так доўга не пачынаецца (браўзер не дае ўключыць з гукам) — уключаем без гуку, каб хоць было відаць. */
 const AUTOPLAY_FALLBACK_MS = 4000;
 /**
- * Першыя 2–3 с прайгравання YouTube паказвае над відэа свой інтэрфейс (назва, паўза, «Поделиться», лагатып) — і пры
- * любым спосабе запуску. Пасля перамоткі ён яго зноў не паказвае (праверана 2026-10-17). Таму відэа спачатку грае
- * схавана і без гуку столькі часу, потым — перамотка ў патрэбнае месца (звычайна ў пачатак), гук і плашка:
- * гледачы бачаць відэа з першага кадра без кнопак. Пры звычайнай змене песні гэта робіцца загадзя (`prepare`).
+ * Пры звычайнай змене песні відэа загадзя загружана і грае схавана без гуку (`prepare`): у момант змены — перамотка
+ * ў пачатак, гук і плашка, без чакання загрузкі. Інтэрфейс YouTube першыя 2–3 с пасля старту і перамоткі ўсё роўна
+ * з’яўляецца (у OBS — і пасля перамоткі, праверана 2026-10-17), таму назву і ніжнія кнопкі хавае абразанне плэера,
+ * а паўзу ў цэнтры — наш значок (Overlay.tsx, `VideoBadge`).
  */
-const WARM_MS = 3500;
+const SEEK_TOLERANCE_S = 0.5;
 /**
  * Калі відэа за столькі пасля загрузкі так і не пачало ісці (рэклама перад відэа, памылка YouTube), плашка
  * ўсё роўна з’яўляецца: рэкламу і памылкі мы не хаваем (правілы YouTube забараняюць схаваны плэер).
@@ -130,11 +130,11 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       unstartedTime = time;
     }
     if (revealedKey === t.key || t.prepare) return;
-    // Відэа ўжо прагрэлася (YouTube схаваў інтэрфейс) — у патрэбнае месца, гук, плашка.
-    const warm = state === PlayerState.PLAYING && mainStart !== null && (time - mainStart) * 1000 >= WARM_MS;
+    // Само відэа пайшло — (калі яно ўжо было падрыхтавана, у патрэбнае месца) гук і плашка адразу.
+    const go = state === PlayerState.PLAYING && mainStart !== null;
     const nothing = mainStart === null && !adSeen && Date.now() - loadedAt >= REVEAL_NOT_STARTED_MS;
-    if (warm) {
-      player.seekTo(t.positionMs / 1000, true);
+    if (go) {
+      if (Math.abs(time - t.positionMs / 1000) > SEEK_TOLERANCE_S) player.seekTo(t.positionMs / 1000, true);
       lastSeek = t.seek;
       revealedKey = t.key;
       applySound();

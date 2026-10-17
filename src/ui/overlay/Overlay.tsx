@@ -14,7 +14,7 @@ import { listenForBrain, type ReceiveChannel } from '../../obs/channel';
 import { DIAG_MARKER_KEY, obsBrowserInfo, readJson } from '../shared/diag';
 import { useNow, useStore } from '../shared/hooks';
 import { leaderText } from '../shared/leader';
-import { SourceIcon, SpotifyLogo, UserIcon, YouTubeLogo } from '../shared/icons';
+import { PauseIcon, SourceIcon, SpotifyLogo, UserIcon, YouTubeLogo } from '../shared/icons';
 import { createVideoPlayer, type VideoTarget } from './video-player';
 import { Waveline } from './Waveline';
 
@@ -163,6 +163,7 @@ function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null;
    */
   const mirror = !demo && !isOwner;
   const visible = Boolean(target && !target.prepare && target.key !== endedKey && (mirror || target.key === revealedKey));
+  const badge = useBadge(visible && !mirror, target);
 
   useEffect(() => {
     if (!host.current) return;
@@ -204,11 +205,47 @@ function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null;
       <div class={`video-card${visible ? ' shown' : ''}`}>
         <div class="video-frame">
           <div class="video-host" ref={host} />
+          <div class={`video-badge${badge ? ' shown' : ''}`} aria-hidden="true">
+            {target?.playing === false ? <PauseIcon size={30} /> : <YouTubeLogo size={36} />}
+          </div>
           {mirror && target && !target.prepare && <img class="video-thumb" src={`https://i.ytimg.com/vi/${target.videoId}/hqdefault.jpg`} alt="" />}
         </div>
       </div>
     </div>
   );
+}
+
+/** Колькі YouTube трымае паўзу ў цэнтры пасля старту, перамоткі і працягу (у OBS — каля 3 с). */
+const BADGE_MS = 3500;
+
+/**
+ * Паўзу ў цэнтры відэа YouTube паказвае першыя секунды пасля старту, перамоткі і працягу — адключыць яе ў плэеры
+ * нельга. На гэты час (і пакуль відэа на паўзе) на тым жа месцы — наш значок (ADR-020, дапаўненне 7).
+ */
+function useBadge(active: boolean, target: VideoTarget | null): boolean {
+  const [until, setUntil] = useState(0);
+  const [, rerender] = useState(0);
+  const playing = target?.playing ?? true;
+  const wasPlaying = useRef(playing);
+  const show = () => setUntil(Date.now() + BADGE_MS);
+
+  useEffect(() => {
+    if (active) show();
+  }, [active, target?.key]);
+  useEffect(() => {
+    if (active && target?.seek) show();
+  }, [target?.seek]);
+  useEffect(() => {
+    if (active && playing && !wasPlaying.current) show();
+    wasPlaying.current = playing;
+  }, [playing]);
+  useEffect(() => {
+    if (!until) return;
+    const id = setTimeout(() => rerender((n) => n + 1), Math.max(0, until - Date.now()) + 20);
+    return () => clearTimeout(id);
+  }, [until]);
+
+  return active && (!playing || Date.now() < until);
 }
 
 function DebugPanel({ info, hasState, node }: { info: DebugInfo; hasState: boolean; node: BrainNode | null }) {
