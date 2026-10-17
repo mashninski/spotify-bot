@@ -89,6 +89,20 @@ body {
   background: #000;
 }
 
+.video-host {
+  position: absolute;
+  inset: 0;
+}
+
+/* Вокладка відэа ў оверлэі, які не грае відэа сам (гл. VideoCard). */
+.video-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .video-frame iframe {
   position: absolute;
   inset: 0;

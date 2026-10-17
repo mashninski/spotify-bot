@@ -150,7 +150,12 @@ function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null;
   const target: VideoTarget | null = demo
     ? { key: 'demo-video', videoId: demoVideoId, positionMs: 0, playing: true, seek: 0 }
     : videoTarget(player);
-  const visible = Boolean(target && target.key !== endedKey && target.key === revealedKey);
+  /**
+   * Не-ўладальнік (другая крыніца з оверлэем) відэа не грае, а паказвае вокладку: два плэеры з адным акаўнтам
+   * YouTube Premium YouTube лічыць праглядам у двух месцах і спыняе адзін з іх (відэа абрывалася праз некалькі секунд).
+   */
+  const mirror = !demo && !isOwner;
+  const visible = Boolean(target && target.key !== endedKey && (mirror || target.key === revealedKey));
 
   useEffect(() => {
     if (!host.current) return;
@@ -184,13 +189,16 @@ function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null;
   }, [skipAds]);
 
   useEffect(() => {
-    control.current?.setTarget(target && target.key !== endedKey ? target : null);
-  }, [target?.key, target?.videoId, target?.playing, target?.seek, Math.floor((target?.positionMs ?? 0) / 1000), endedKey]);
+    control.current?.setTarget(target && target.key !== endedKey && !mirror ? target : null);
+  }, [target?.key, target?.videoId, target?.playing, target?.seek, Math.floor((target?.positionMs ?? 0) / 1000), endedKey, mirror]);
 
   return (
     <div class="video-slot">
       <div class={`video-card${visible ? ' shown' : ''}`}>
-        <div class="video-frame" ref={host} />
+        <div class="video-frame">
+          <div class="video-host" ref={host} />
+          {mirror && target && <img class="video-thumb" src={`https://i.ytimg.com/vi/${target.videoId}/hqdefault.jpg`} alt="" />}
+        </div>
       </div>
     </div>
   );
