@@ -52,7 +52,9 @@ export type RefundReason =
   | 'live'
   | 'youtube-failed'
   /** Відэа так і не паказалася ў оверлэі. */
-  | 'video-error';
+  | 'video-error'
+  /** YouTube уключыў рэкламу перад відэа — відэа не паказваем (ADR-020). */
+  | 'video-ad';
 
 /** Якая ўзнагарода: песня або відэа YouTube (ADR-020). */
 export type RewardKind = 'song' | 'video';

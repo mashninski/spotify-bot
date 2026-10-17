@@ -36,6 +36,9 @@ function YouTubeBlock({ controller }: { controller: DockController }) {
       <Row label={t('diag.youtube.audio')} tone={audio ? '' : 'muted'}>
         {audio || t('diag.youtube.audio.simulated')}
       </Row>
+      <Row label={t('diag.youtube.ads')} tone={youtube.ads ? 'bad' : 'good'}>
+        {youtube.ads ? `${youtube.ads} · ${clock(youtube.lastAdAt)}` : 0}
+      </Row>
     </Section>
   );
 }

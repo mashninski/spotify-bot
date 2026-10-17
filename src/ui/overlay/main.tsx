@@ -5,7 +5,8 @@ import { createStore } from '../../core/store';
 import { Overlay, type OverlayOptions } from './Overlay';
 import './overlay.css';
 
-// Параметры адраса: ?debug=1 — дыягностыка, ?demo=1 — тэставыя даныя без бота, ?demo=video — тэставае відэа,
+// Параметры адраса: ?debug=1 — дыягностыка, ?demo=1 — тэставыя даныя без бота, ?demo=video — тэставае відэа
+// (&v=<id відэа YouTube> — любое іншае),
 // #obs=ws://…&pw=… — запаснае падключэнне да OBS (толькі калі канал obs-browser не працуе).
 const search = new URLSearchParams(location.search);
 const hash = new URLSearchParams(location.hash.slice(1));
@@ -14,6 +15,7 @@ const demo = search.get('demo');
 const options: OverlayOptions = {
   debug: search.get('debug') === '1',
   demo: demo === '1' ? 'song' : demo === 'video' ? 'video' : null,
+  demoVideoId: /^[A-Za-z0-9_-]{11}$/.test(search.get('v') ?? '') ? search.get('v')! : undefined,
   obs: hash.has('pw') || hash.has('obs') ? { url: hash.get('obs') || 'ws://127.0.0.1:4455', password: hash.get('pw') ?? '' } : undefined,
 };
 

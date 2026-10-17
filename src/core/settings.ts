@@ -29,6 +29,8 @@ export interface Settings {
     volume: number;
     /** Крыніца OBS з гукам відэа для хвалі (Browser Source оверлэя); пуста — знайсці самому. */
     audioSource: string;
+    /** YouTube уключыў рэкламу перад відэа — відэа не паказваецца, замова адмяняецца з вяртаннем балаў. */
+    skipAds: boolean;
   };
 }
 
@@ -44,7 +46,7 @@ export function defaultSettings(): Settings {
     rules: { ...DEFAULT_RULES },
     spotify: { clientId: '' },
     twitch: { clientId: '' },
-    video: { volume: DEFAULT_VIDEO_VOLUME, audioSource: '' },
+    video: { volume: DEFAULT_VIDEO_VOLUME, audioSource: '', skipAds: true },
   };
 }
 
@@ -94,6 +96,7 @@ export function loadSettings(storage: StorageLike | null): Settings {
     video: {
       volume,
       audioSource: pick(video.audioSource, d.video.audioSource),
+      skipAds: pick(video.skipAds, d.video.skipAds),
     },
   };
 }

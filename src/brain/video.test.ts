@@ -290,6 +290,41 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
     }
   });
 
+  it('YouTube уключыў рэкламу — відэа не паказваецца, балы вернуты, музыка далей; лічыльнік рэкламы', async () => {
+    const { make, twitch, spotify } = setup();
+    const dock = make('dock');
+    await ready(twitch, dock);
+    const r = twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
+    dock.next();
+    await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
+    report(dock, 'ad', 1200);
+    await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
+    await vi.waitFor(
+      () => expect(twitch.state.chat.at(-1)).toBe('@Kasia YouTube уключыў рэкламу перад «Rick Astley - Never Gonna Give You Up», рэкламу на стрыме не паказваем, балы вернуты'),
+      WAIT,
+    );
+    await vi.waitFor(() => expect(spotify.state.playing).toBe(true), WAIT);
+    expect(dock.youtube.get().ads).toBe(1);
+  });
+
+  it('рэкламу паказваць (налада выключана) — відэа застаецца, пасля рэкламы грае', async () => {
+    const { make, twitch, spotify } = setup();
+    const dock = make('dock');
+    await ready(twitch, dock);
+    dock.updateSettings((s) => ({ ...s, video: { ...s.video, skipAds: false } }));
+    const r = twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
+    dock.next();
+    await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
+    report(dock, 'ad', 3000);
+    await new Promise((res) => setTimeout(res, 800));
+    expect(dock.player.get().current?.track.source).toBe('youtube');
+    expect(dock.youtube.get().ads).toBe(1);
+    report(dock, 'playing', 1000);
+    await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('FULFILLED'), WAIT);
+  });
+
   it('памылка плэера пасля пачатку — відэа заканчваецца, але балы не вяртаюцца', async () => {
     const { make, twitch, spotify } = setup();
     const dock = make('dock');

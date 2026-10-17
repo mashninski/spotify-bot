@@ -22,6 +22,8 @@ export interface OverlayOptions {
   debug: boolean;
   /** Паказаць тэставыя даныя без бота (для размяшчэння ў сцэне і праверкі выгляду): песня або відэа. */
   demo: 'song' | 'video' | null;
+  /** Відэа для `?demo=video` (па змаўчанні — Rick Astley). */
+  demoVideoId?: string;
   /** Запасны шлях: падключэнне да OBS самім оверлеем (пароль з #hash адраса). */
   obs?: { url: string; password: string };
 }
@@ -97,7 +99,7 @@ export function Overlay({ options, node, videoOwner }: { options: OverlayOptions
 
   return (
     <div class={`overlay${isVideo ? ' yt' : ''}`}>
-      <VideoCard node={node} demo={options.demo === 'video'} owner={videoOwner} />
+      <VideoCard node={node} demo={options.demo === 'video'} demoVideoId={options.demoVideoId ?? DEMO_VIDEO_ID} owner={videoOwner} />
       {current && state && (
         <>
           <div class={`strip${state.isPlaying ? '' : ' paused'}`}>
@@ -135,7 +137,7 @@ function videoTarget(player: PlayerState): VideoTarget | null {
  * Плашка з відэа над палоскай. Плэер ствараецца адзін раз і застаецца ў старонцы, плашка плаўна
  * з’яўляецца і знікае. Калі відэа скончылася ў плэеры, плашка хаваецца адразу, не чакаючы мозгу.
  */
-function VideoCard({ node, demo, owner }: { node: BrainNode | null; demo: boolean; owner: Store<boolean> }) {
+function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null; demo: boolean; demoVideoId: string; owner: Store<boolean> }) {
   const host = useRef<HTMLDivElement>(null);
   const control = useRef<ReturnType<typeof createVideoPlayer> | null>(null);
   const [endedKey, setEndedKey] = useState('');
@@ -143,10 +145,10 @@ function VideoCard({ node, demo, owner }: { node: BrainNode | null; demo: boolea
   const [revealedKey, setRevealedKey] = useState('');
   const isOwner = useStore(owner);
   const player = useStore(node?.player ?? NO_PLAYER);
-  const volume = useStore(node?.settings ?? NO_SETTINGS).video.volume;
+  const { volume, skipAds } = useStore(node?.settings ?? NO_SETTINGS).video;
 
   const target: VideoTarget | null = demo
-    ? { key: 'demo-video', videoId: DEMO_VIDEO_ID, positionMs: 0, playing: true, seek: 0 }
+    ? { key: 'demo-video', videoId: demoVideoId, positionMs: 0, playing: true, seek: 0 }
     : videoTarget(player);
   const visible = Boolean(target && target.key !== endedKey && target.key === revealedKey);
 
@@ -173,6 +175,10 @@ function VideoCard({ node, demo, owner }: { node: BrainNode | null; demo: boolea
   useEffect(() => {
     control.current?.setVolume(demo ? 0 : volume);
   }, [volume, demo]);
+
+  useEffect(() => {
+    control.current?.setSkipAds(skipAds);
+  }, [skipAds]);
 
   useEffect(() => {
     control.current?.setTarget(target && target.key !== endedKey ? target : null);

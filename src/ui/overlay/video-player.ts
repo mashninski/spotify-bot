@@ -79,31 +79,80 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
   let fallbackMuted = false;
   let destroyed = false;
   let revealedKey = '';
-  /** З якога месца (с) відэа загружана: ад яго лічым, колькі прайгралася. */
-  let loadedFrom = 0;
+  let skipAds = true;
+  /** Час відэа (с), калі само відэа (не рэклама) пачало граць; `null` — яшчэ не пачало. */
+  let mainStart: number | null = null;
+  /** YouTube паказвае (паказаў) рэкламу перад гэтым відэа. */
+  let adSeen = false;
+  /** Апошні час плэера, пакуль ён «не запушчаны»: калі ён ідзе — гэта рэклама. */
+  let unstartedTime: number | null = null;
 
   const timer = setInterval(() => tick(), REPORT_MS);
-  const revealTimer = setInterval(() => checkReveal(), REVEAL_CHECK_MS);
+  const watchTimer = setInterval(() => watch(), REVEAL_CHECK_MS);
   let lastIdleAt = 0;
 
-  /** Ці пара паказаць плашку: відэа прайгралася 4 с або так і не пачалося за 8 с. */
-  function checkReveal(): void {
+  /** Новае відэа ў плэеры: пачынаем назіранне нанова. */
+  function resetWatch(): void {
+    mainStart = null;
+    adSeen = false;
+    unstartedTime = null;
+  }
+
+  /**
+   * Раз у 250 мс: ці пачала граць само відэа, ці не рэклама гэта, ці пара паказаць плашку.
+   * Рэклама: плэер кажа «не запушчана» (-1), а час ідзе (праверана 2026-10-17 на сапраўдных прэ-ролах).
+   */
+  function watch(): void {
     const t = target;
-    if (!t || revealedKey === t.key || loadedKey !== t.key || !loadedAt) return;
-    let played = 0;
-    if (player && ready) {
-      try {
-        played = ((player.getCurrentTime() || 0) - loadedFrom) * 1000;
-      } catch {
-        played = 0;
+    if (!t || !player || !ready || loadedKey !== t.key || endedKey === t.key) return;
+    let state: number;
+    let time: number;
+    try {
+      state = player.getPlayerState();
+      time = player.getCurrentTime() || 0;
+    } catch {
+      return;
+    }
+    if (state === PlayerState.PLAYING) {
+      if (mainStart === null) {
+        mainStart = time;
+        applySound();
       }
+    } else if (state === PlayerState.UNSTARTED) {
+      if (unstartedTime !== null && time > unstartedTime + 0.15 && !adSeen) onAd(t.key);
+      unstartedTime = time;
     }
-    const waited = Date.now() - loadedAt;
-    // Відэа пайшло — чакаем, пакуль YouTube схавае свой інтэрфейс; не пайшло зусім — не хаваем тое, што там ёсць.
-    if (played >= REVEAL_PLAYED_MS || (played < 250 && waited >= REVEAL_NOT_STARTED_MS)) {
-      revealedKey = t.key;
-      options.onReveal(t.key);
+    if (revealedKey === t.key) return;
+    // Плашка — калі само відэа ідзе 4 с: YouTube ужо схаваў назву, кнопкі і «Другие видео».
+    const played = mainStart === null ? 0 : (time - mainStart) * 1000;
+    const nothing = mainStart === null && !adSeen && Date.now() - loadedAt >= REVEAL_NOT_STARTED_MS;
+    if ((state === PlayerState.PLAYING && played >= REVEAL_PLAYED_MS) || nothing) doReveal(t.key);
+  }
+
+  function doReveal(key: string): void {
+    revealedKey = key;
+    options.onReveal(key);
+  }
+
+  /**
+   * YouTube уключыў рэкламу. Калі рэкламу не паказваем — відэа спыняецца адразу (плашка яшчэ схаваная, гук
+   * выключаны), мозг адменіць замову і працягне музыку. Калі паказваем — плашка і гук адразу: рэкламу не хаваем.
+   */
+  function onAd(key: string): void {
+    adSeen = true;
+    report('ad');
+    if (skipAds) {
+      endedKey = key;
+      try {
+        player?.stopVideo();
+      } catch {
+        // Плэер ужо спынены.
+      }
+      options.onLocalEnd(key);
+      return;
     }
+    applySound();
+    doReveal(key);
   }
 
   function report(state: VideoPlayerState, code?: number): void {
@@ -123,7 +172,9 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
 
   function applySound(): void {
     if (!player || !ready) return;
-    if (!owner || fallbackMuted) {
+    // Гук — толькі калі пайшло само відэа (або рэклама, калі яе паказваем): рэклама не павінна мільгнуць гукам у эфіры.
+    const allowed = mainStart !== null || (adSeen && !skipAds);
+    if (!owner || fallbackMuted || !allowed) {
       player.mute();
       return;
     }
@@ -141,14 +192,14 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       options.host.replaceChildren(el);
       loadedKey = t.key;
       loadedAt = Date.now();
-      loadedFrom = Math.floor(t.positionMs / 1000);
       lastSeek = t.seek;
+      resetWatch();
       player = new YT.Player(el, {
         width: '100%',
         height: '100%',
         videoId: t.videoId,
-        // Не-ўладальнік з першага кадра без гуку (гук павінен быць адзін на ўсе оверлэі).
-        playerVars: playerVars({ autoplay: t.playing ? 1 : 0, start: Math.floor(t.positionMs / 1000), mute: owner && volume > 0 ? 0 : 1 }),
+        // Без гуку з першага кадра: гук уключаецца, калі пайшло само відэа (не рэклама), і толькі ва ўладальніка.
+        playerVars: playerVars({ autoplay: t.playing ? 1 : 0, start: Math.floor(t.positionMs / 1000), mute: 1 }),
         events: {
           onReady: () => {
             ready = true;
@@ -198,9 +249,9 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
     if (loadedKey !== t.key) {
       loadedKey = t.key;
       loadedAt = Date.now();
-      loadedFrom = Math.floor(t.positionMs / 1000);
       lastSeek = t.seek;
       endedKey = '';
+      resetWatch();
       fallbackMuted = false;
       applySound();
       const start = { videoId: t.videoId, startSeconds: Math.floor(t.positionMs / 1000) };
@@ -236,7 +287,7 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       return;
     }
     const state = player.getPlayerState();
-    if (target.playing && loadedKey === target.key && (state === PlayerState.UNSTARTED || state === PlayerState.CUED) && now - loadedAt > AUTOPLAY_FALLBACK_MS && !fallbackMuted) {
+    if (target.playing && loadedKey === target.key && (state === PlayerState.UNSTARTED || state === PlayerState.CUED) && now - loadedAt > AUTOPLAY_FALLBACK_MS && !fallbackMuted && !adSeen) {
       fallbackMuted = true;
       applySound();
       player.playVideo();
@@ -257,6 +308,10 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       owner = value;
       applySound();
     },
+    /** Рэкламу не паказваем: відэа з рэкламай спыняецца (налада дока). */
+    setSkipAds(value: boolean): void {
+      skipAds = value;
+    },
     setVolume(value: number): void {
       volume = Math.max(0, Math.min(100, Math.round(value)));
       applySound();
@@ -264,7 +319,7 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
     destroy(): void {
       destroyed = true;
       clearInterval(timer);
-      clearInterval(revealTimer);
+      clearInterval(watchTimer);
       try {
         player?.destroy();
       } catch {

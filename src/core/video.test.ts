@@ -97,6 +97,13 @@ describe('відэа: паведамленні плэера', () => {
     expect(other.ended).toBe(false);
   });
 
+  it('рэклама: адзнака ад плэера, час відэа не мяняецца, відэа не лічыцца пачатым', () => {
+    const r = vd.applyReport({ ...s, progressMs: 0 }, { key: 'v', state: 'ad', positionMs: 15_000 }, 700);
+    expect(r.ad).toBe(true);
+    expect(r.state.progressMs).toBe(0);
+    expect(r.state.video).toMatchObject({ reportAt: 700, started: false });
+  });
+
   it('вартаўнік: плэер маўчыць 12 с', () => {
     expect(vd.videoStalled(s, vd.PLAYER_SILENCE_MS - 1)).toBe(false);
     expect(vd.videoStalled(s, vd.PLAYER_SILENCE_MS)).toBe(true);

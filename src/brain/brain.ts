@@ -391,14 +391,17 @@ export function createBrain(options: BrainOptions) {
    * Відэа скончылася або яго спынілі. `playKey` — замова, якую ўключыць замест наступнай (▶ у доку).
    * Відэа, якое так і не пачало паказвацца (памылка, оверлэя няма), — балы гледачу вяртаюцца.
    */
-  function finishVideo(reason: 'ended' | 'next' | 'failed' | 'stalled' | 'streamer', playKey?: string): void {
+  function finishVideo(reason: 'ended' | 'next' | 'failed' | 'stalled' | 'streamer' | 'ad', playKey?: string): void {
     const before = player.get();
     const video = vd.currentVideo(before);
     if (!video || !before.video) return;
-    const failed = reason === 'failed' || reason === 'stalled';
-    if (failed) {
+    if (reason === 'failed' || reason === 'stalled') {
       if (!before.video.started && video.redemptionId) twitch.failed(video.redemptionId, video.track.title);
       showNotice(t('player.videoFailed', { title: video.track.title }), 'error');
+    } else if (reason === 'ad') {
+      // Рэкламу на стрым не пускаем (ADR-020): відэа спынена, гледачу — балы назад.
+      if (!before.video.started && video.redemptionId) twitch.failed(video.redemptionId, video.track.title, 'video-ad');
+      showNotice(t('player.videoAd', { title: video.track.title }), 'error');
     }
     const ended = vd.endVideo(before);
     if (!ended) return;
@@ -460,6 +463,11 @@ export function createBrain(options: BrainOptions) {
     if (!report.key) return;
     const result = vd.applyReport(player.get(), report, now);
     if (result.state !== player.get()) player.set(result.state);
+    if (result.ad) {
+      if (now - stores.youtube.get().lastAdAt > 2000) stores.youtube.set((s) => ({ ...s, ads: s.ads + 1, lastAdAt: now }));
+      if (settings.get().video.skipAds) finishVideo('ad');
+      return;
+    }
     if (result.ended) finishVideo('ended');
     else if (result.failed) finishVideo('failed');
   }

@@ -634,11 +634,11 @@ export function createTwitchLink(options: TwitchLinkOptions) {
       setLog(rl.refund(log, redemptionId, 'removed', chatText(record.user, { ok: false, reason: 'removed', title, video }), now()));
     },
 
-    /** Відэа так і не паказалася ў оверлэі (ADR-020) — вярнуць баллы гледачу. */
-    failed(redemptionId: string, title: string): void {
+    /** Відэа так і не паказалася ў оверлэі або перад ім рэклама (ADR-020) — вярнуць баллы гледачу. */
+    failed(redemptionId: string, title: string, reason: 'video-error' | 'video-ad' = 'video-error'): void {
       const record = log.records[redemptionId];
       if (!record || record.stage !== 'queued') return;
-      setLog(rl.refund(log, redemptionId, 'video-error', chatText(record.user, { ok: false, reason: 'video-error', title, video: true }), now()));
+      setLog(rl.refund(log, redemptionId, reason, chatText(record.user, { ok: false, reason, title, video: true }), now()));
     },
   };
 }

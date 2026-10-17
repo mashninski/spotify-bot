@@ -154,6 +154,10 @@ function VideoSection({ controller }: { controller: DockController }) {
         </select>
       </label>
       {status && <p class={`small ${tone}`}>{status}</p>}
+      <label class="check">
+        <input type="checkbox" checked={settings.video.skipAds} onChange={(e) => setVideo({ skipAds: e.currentTarget.checked })} />
+        <span>{t('settings.video.skipAds')}</span>
+      </label>
     </Section>
   );
 }

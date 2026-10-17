@@ -44,9 +44,12 @@ export interface YouTubeInfo {
   overlaySource: string;
   /** У гэтай крыніцы ўключана «Управлять звуком через OBS» — хваля бачыць гук відэа. */
   overlayAudio: boolean;
+  /** Колькі разоў YouTube уключаў рэкламу перад відэа (з запуску бота) і калі апошні раз — па гэтым правяраем Premium. */
+  ads: number;
+  lastAdAt: number;
 }
 
-export const initialYouTubeInfo = (): YouTubeInfo => ({ playerSeenAt: 0, overlaySource: '', overlayAudio: false });
+export const initialYouTubeInfo = (): YouTubeInfo => ({ playerSeenAt: 0, overlaySource: '', overlayAudio: false, ads: 0, lastAdAt: 0 });
 
 export interface Notice {
   id: number;
@@ -118,7 +121,7 @@ const SIMPLE_COMMANDS = new Set([
   'twitch-disconnect',
 ]);
 
-const VIDEO_STATES: VideoPlayerState[] = ['loading', 'playing', 'paused', 'buffering', 'ended', 'error', 'idle'];
+const VIDEO_STATES: VideoPlayerState[] = ['loading', 'playing', 'paused', 'buffering', 'ended', 'error', 'idle', 'ad'];
 
 export function parseCommand(raw: unknown): Command | null {
   if (!isObject(raw) || typeof raw.type !== 'string') return null;

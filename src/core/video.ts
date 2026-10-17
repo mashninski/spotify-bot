@@ -16,7 +16,8 @@ export const PLAYER_SILENCE_MS = 12_000;
 export const VIDEO_START_TIMEOUT_MS = 90_000;
 
 /** Што паведамляе плэер оверлэя. */
-export type VideoPlayerState = 'loading' | 'playing' | 'paused' | 'buffering' | 'ended' | 'error' | 'idle';
+/** `ad` — YouTube паказвае рэкламу перад відэа (або пасярэдзіне). */
+export type VideoPlayerState = 'loading' | 'playing' | 'paused' | 'buffering' | 'ended' | 'error' | 'idle' | 'ad';
 
 export interface VideoReport {
   /** Ключ запісу чаргі (`''` для `idle` — плэер жывы, але нічога не паказвае). */
@@ -114,9 +115,15 @@ export function resumeContext(state: PlayerState): PlayerState {
 }
 
 /** Паведамленне плэера пра бягучае відэа. `ended` / `failed` — відэа скончылася або паказаць яго нельга. */
-export function applyReport(state: PlayerState, report: VideoReport, now: number): { state: PlayerState; ended: boolean; failed: boolean } {
+export function applyReport(
+  state: PlayerState,
+  report: VideoReport,
+  now: number,
+): { state: PlayerState; ended: boolean; failed: boolean; ad: boolean } {
   const video = currentVideo(state);
-  if (!video || !state.video || report.key !== video.key) return { state, ended: false, failed: false };
+  if (!video || !state.video || report.key !== video.key) return { state, ended: false, failed: false, ad: false };
+  // Час рэкламы — не час відэа: пазіцыю не чапаем.
+  if (report.state === 'ad') return { state: { ...state, video: { ...state.video, reportAt: now } }, ended: false, failed: false, ad: true };
   const started = state.video.started || (report.state === 'playing' && report.positionMs > 0);
   const progressMs =
     report.state === 'ended'
@@ -128,6 +135,7 @@ export function applyReport(state: PlayerState, report: VideoReport, now: number
     state: { ...state, progressMs, video: { ...state.video, reportAt: now, started } },
     ended: report.state === 'ended',
     failed: report.state === 'error',
+    ad: false,
   };
 }
 
