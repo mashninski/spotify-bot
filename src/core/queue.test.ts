@@ -88,16 +88,16 @@ describe('чарга', () => {
     expect(s.history.length).toBe(q.HISTORY_LIMIT);
   });
 
-  it('стан для оверлея: толькі патрэбныя палі і 3 наступныя', () => {
+  it('стан для оверлея: толькі патрэбныя палі і 5 наступных (ADR-020)', () => {
     const s = state({
       current: item('x'),
       isPlaying: true,
       requests: [item('r1', 'kasia')],
-      context: [item('c1'), item('c2'), item('c3')],
+      context: [item('c1'), item('c2'), item('c3'), item('c4'), item('c5')],
     });
     const o = q.toOverlayState(s);
     expect(o.current).toEqual({ key: 'x', title: 'Песня x', artist: 'Выканаўца' });
-    expect(o.upcoming.map((u) => u.key)).toEqual(['r1', 'c1', 'c2']);
+    expect(o.upcoming.map((u) => u.key)).toEqual(['r1', 'c1', 'c2', 'c3', 'c4']);
     expect(o.upcoming[0].requestedBy).toBe('kasia');
     expect('requestedBy' in o.upcoming[1]).toBe(false);
   });

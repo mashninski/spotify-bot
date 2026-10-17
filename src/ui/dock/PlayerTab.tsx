@@ -1,7 +1,7 @@
-// Укладка «Плэер»: што грае ў Spotify, кіраванне, «+» у «Любімыя трэкі», чарга заказаў.
+// Укладка «Плэер»: што грае (песня Spotify або відэа YouTube, ADR-020), кіраванне, «+» у «Любімыя трэкі», чарга замоў.
 
 import { useEffect, useState } from 'preact/hooks';
-import type { QueueItem } from '../../core/types';
+import { isVideo, type QueueItem, type Track } from '../../core/types';
 import { formatClock, t } from '../../i18n';
 import { canSave } from '../../providers/spotify/map';
 import { useStore } from '../shared/hooks';
@@ -13,6 +13,7 @@ import {
   PlayIcon,
   PlusCircleIcon,
   PreviousIcon,
+  SourceIcon,
   UserIcon,
   VolumeIcon,
 } from '../shared/icons';
@@ -33,6 +34,7 @@ export function PlayerTab({ controller }: { controller: DockController }) {
   }, [notice, controller]);
 
   const progress = current ? Math.min(1, state.progressMs / current.track.durationMs) : 0;
+  const video = isVideo(current?.track);
 
   return (
     <div class="player">
@@ -41,8 +43,11 @@ export function PlayerTab({ controller }: { controller: DockController }) {
         {current ? (
           <div class="now-track" key={current.key}>
             <div class="now-head">
-              <div class="now-title">{current.track.title}</div>
-              {spotifyOn && canSave(current.track) && <LikeButton controller={controller} uri={current.track.uri!} />}
+              <div class="now-title">
+                <Source track={current.track} size={14} />
+                {current.track.title}
+              </div>
+              {spotifyOn && !video && canSave(current.track) && <LikeButton controller={controller} uri={current.track.uri!} />}
             </div>
             <div class="now-artist">
               {current.track.artist}
@@ -79,14 +84,15 @@ export function PlayerTab({ controller }: { controller: DockController }) {
             title={state.isPlaying ? t('player.pause') : t('player.play')}
             aria-label={state.isPlaying ? t('player.pause') : t('player.play')}
             onClick={controller.togglePlay}
-            disabled={!current}
+            // Нічога не грае, але ў чарзе ёсць відэа — ▶ пачынае чаргу (і без Spotify).
+            disabled={!current && !state.requests.some((r) => isVideo(r.track))}
           >
             {state.isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
           </button>
           <button class="icon-btn" title={t('player.next')} aria-label={t('player.next')} onClick={controller.next}>
             <NextIcon />
           </button>
-          {spotifyOn && <VolumeControl controller={controller} />}
+          {spotifyOn && (video ? <VideoVolumeControl controller={controller} /> : <VolumeControl controller={controller} />)}
         </div>
       </section>
 
@@ -119,7 +125,10 @@ export function PlayerTab({ controller }: { controller: DockController }) {
           {state.context.slice(0, 5).map((item) => (
             <li key={item.key} class="row">
               <div class="row-text">
-                <div class="row-title">{item.track.title}</div>
+                <div class="row-title">
+                  <Source track={item.track} />
+                  {item.track.title}
+                </div>
                 <div class="row-artist">{item.track.artist}</div>
               </div>
               <span class="row-time">{formatClock(item.track.durationMs)}</span>
@@ -136,7 +145,10 @@ function QueueRow({ item, index, controller }: { item: QueueItem; index: number;
     <li class="row">
       <span class="row-index">{index}</span>
       <div class="row-text">
-        <div class="row-title">{item.track.title}</div>
+        <div class="row-title">
+          <Source track={item.track} />
+          {item.track.title}
+        </div>
         <div class="row-artist">
           {item.track.artist}
           {item.requestedBy && (
@@ -159,6 +171,16 @@ function QueueRow({ item, index, controller }: { item: QueueItem; index: number;
         <CloseIcon size={14} />
       </button>
     </li>
+  );
+}
+
+/** Значок крыніцы перад назвай: песня Spotify або відэа YouTube. */
+function Source({ track, size = 12 }: { track: Track; size?: number }) {
+  const source = isVideo(track) ? 'youtube' : 'spotify';
+  return (
+    <span class="source" title={t(`player.source.${source}`)}>
+      <SourceIcon source={source} size={size} />
+    </span>
   );
 }
 
@@ -230,6 +252,38 @@ function VolumeControl({ controller }: { controller: DockController }) {
         }}
         onChange={() => setDragging(null)}
         onPointerUp={() => setDragging(null)}
+      />
+    </div>
+  );
+}
+
+/** Падчас відэа паўзунок кіруе гучнасцю відэа ў оверлэі (налада, ADR-020), а не Spotify. */
+function VideoVolumeControl({ controller }: { controller: DockController }) {
+  const volume = useStore(controller.settings).video.volume;
+  const set = (value: number) => {
+    if (value > 0) volumeBeforeMute = value;
+    controller.updateSettings((s) => ({ ...s, video: { ...s.video, volume: value } }));
+  };
+  const title = t('player.videoVolume', { n: volume });
+  return (
+    <div class="volume" title={title}>
+      <button
+        class="icon-btn small"
+        aria-label={volume === 0 ? t('player.unmute') : t('player.mute')}
+        title={volume === 0 ? t('player.unmute') : t('player.mute')}
+        onClick={() => set(volume === 0 ? volumeBeforeMute : 0)}
+      >
+        <VolumeIcon level={volume} />
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={volume}
+        aria-label={t('player.videoVolume.label')}
+        style={{ '--v': `${volume}%` }}
+        onInput={(e) => set(Number(e.currentTarget.value))}
       />
     </div>
   );

@@ -1,11 +1,25 @@
-/* Оверлей: празрысты фон, кампактная палоска ў колерах Spotify. */
+/* Оверлей: празрысты фон, кампактная палоска ў колерах Spotify. Падчас відэа YouTube — чырвоная (ADR-020). */
+
+/* Колер акцэнту рэгіструецца як колер — тады яго змена плаўная (пераход паміж Spotify і YouTube). */
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1ed760;
+}
 
 :root {
   --green: #1ed760;
+  --red: #ff4040;
   --bg: rgba(18, 18, 18, 0.92);
   --bg-soft: rgba(18, 18, 18, 0.72);
   --text: #ffffff;
   --muted: #b3b3b3;
+  /** Месца пад плашку відэа (16:9 па ўсёй шырыні) — палоска застаецца на адным месцы. */
+  --video-slot: 290px;
+  /** На колькі плэер вышэйшы за плашку зверху і знізу (там інтэрфейс YouTube). */
+  --video-crop: 90px;
+  /** Тэмп пераходу Spotify ↔ YouTube. */
+  --swap: 0.9s cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 html,
@@ -17,6 +31,7 @@ body {
 }
 
 .overlay {
+  --accent: var(--green);
   box-sizing: border-box;
   width: 100%;
   max-width: 520px;
@@ -24,6 +39,84 @@ body {
   font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  transition: --accent var(--swap);
+}
+
+.overlay.yt {
+  --accent: var(--red);
+}
+
+/* Плашка з відэа над палоскай: з’яўляецца плаўна, калі пачынаецца відэа, і плаўна знікае. */
+.video-slot {
+  height: var(--video-slot);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.video-card {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px;
+  background: var(--bg);
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(14px) scale(0.97);
+  transform-origin: 50% 100%;
+  visibility: hidden;
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s cubic-bezier(0.4, 0, 1, 1),
+    visibility 0s linear 0.45s;
+}
+
+.video-card.shown {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  /* З’яўляецца, калі відэа ўжо грае і YouTube схаваў свой інтэрфейс (гл. video-player.ts). */
+  transition:
+    opacity 0.6s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
+}
+
+.video-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+/* Плэер вышэйшы за плашку: відэа (16:9) у ім па цэнтры і супадае з плашкай, а тое, што YouTube малюе
+   ля верхняга і ніжняга краю плэера (назва, «Поделиться», лагатып, «Другие видео»), — за краем плашкі. */
+.video-host {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--video-crop));
+  bottom: calc(-1 * var(--video-crop));
+}
+
+/* Вокладка відэа ў оверлэі, які не грае відэа сам (гл. VideoCard). */
+.video-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;
 }
 
 .strip {
@@ -41,9 +134,50 @@ body {
   opacity: 0.75;
 }
 
-.logo {
-  display: flex;
+/* Лагатыпы: наперадзе — крыніца, якая грае зараз; другая — ззаду і збоку, прыцемненая. */
+.logos {
+  position: relative;
   flex-shrink: 0;
+  width: 48px;
+  height: 34px;
+}
+
+.logo {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: flex;
+  transition:
+    transform var(--swap),
+    opacity var(--swap),
+    filter var(--swap);
+}
+
+.logo-spotify {
+  z-index: 2;
+  margin-top: -15px;
+}
+
+.logo-youtube {
+  z-index: 1;
+  margin-top: -16px;
+  transform: translateX(19px) scale(0.72);
+  opacity: 0.38;
+  filter: saturate(0.5) brightness(0.75);
+}
+
+.yt .logo-spotify {
+  z-index: 1;
+  transform: translateX(19px) scale(0.72);
+  opacity: 0.38;
+  filter: saturate(0.5) brightness(0.75);
+}
+
+.yt .logo-youtube {
+  z-index: 2;
+  transform: none;
+  opacity: 1;
+  filter: none;
 }
 
 /* Назва песні: старая (`.leaving`) спачатку сыходзіць, потым з’яўляецца новая (`.entering`) — гл. TrackMeta.
@@ -70,11 +204,30 @@ body {
 }
 
 .title,
-.artist,
-.upcoming li {
+.artist-name,
+.up-title,
+.up-artist {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Радок з выканаўцам (каналам) і нікам: скарачаецца назва, нік гледача відаць заўсёды. */
+.artist,
+.upcoming li {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.artist-name {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.by {
+  flex-shrink: 0;
 }
 
 .title {
@@ -96,7 +249,7 @@ body {
 
 .by {
   margin-left: 6px;
-  color: var(--green);
+  color: var(--accent);
   font-size: 0.85em;
   font-weight: 600;
 }
@@ -105,13 +258,13 @@ body {
   vertical-align: -1px;
 }
 
-/* Чарга: тонкая зялёная лінія злева паказвае, што песні ідуць адна за адной. */
+/* Чарга: тонкая лінія колеру акцэнту злева паказвае, што песні і відэа ідуць адно за адным. */
 .upcoming {
   list-style: none;
   margin: 6px 0 0 26px;
   padding: 6px 10px 6px 12px;
   background: var(--bg-soft);
-  border-left: 2px solid rgba(30, 215, 96, 0.6);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   border-radius: 0 8px 8px 0;
   max-width: calc(100% - 26px);
   box-sizing: border-box;
@@ -129,14 +282,41 @@ body {
   opacity: 0.95;
 }
 .upcoming li:nth-child(2) {
-  opacity: 0.78;
+  opacity: 0.84;
 }
 .upcoming li:nth-child(3) {
+  opacity: 0.72;
+}
+.upcoming li:nth-child(4) {
   opacity: 0.6;
 }
+.upcoming li:nth-child(5) {
+  opacity: 0.48;
+}
 
+/* Значок крыніцы (Spotify / YouTube) перад назвай. */
+.up-source {
+  display: inline-flex;
+  align-self: center;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.up-title {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+/* Выканаўца скарачаецца раней за назву. */
 .up-artist {
+  min-width: 0;
+  flex: 0 1000 auto;
   color: var(--muted);
+}
+
+.up-artist::before {
+  content: '·';
+  margin: 0 4px;
 }
 
 @keyframes track-in {
@@ -167,4 +347,47 @@ body {
   color: #ffeb3b;
   font: 11px/1.4 Consolas, monospace;
   border-radius: 6px;
+}
+
+/* Доўгая назва прагортваецца (Marquee у Overlay.tsx): без шматкроп’я, тэкст — адным радком. */
+.marquee {
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.marquee-text {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+/* Наш значок на месцы паўзы YouTube у цэнтры відэа (першыя секунды пасля старту, перамоткі, працягу і на паўзе). */
+.video-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 80px;
+  height: 80px;
+  margin: -40px 0 0 -40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: rgba(18, 18, 18, 0.62);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transform: scale(0.92);
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+  pointer-events: none;
+}
+
+.video-badge.shown {
+  opacity: 1;
+  transform: none;
+  /* З’яўляецца адразу: паўза YouTube відаць з першага кадра. */
+  transition: none;
 }

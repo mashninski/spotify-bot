@@ -91,7 +91,85 @@ export function SettingsTab({ controller }: { controller: DockController }) {
           <span>{t('settings.rules.allowExplicit')}</span>
         </label>
       </Section>
+
+      <VideoSection controller={controller} />
     </div>
+  );
+}
+
+/** Відэа з YouTube (ADR-020): кошт і даўжыня замовы, гучнасць, гук для хвалі. */
+function VideoSection({ controller }: { controller: DockController }) {
+  const settings = useStore(controller.settings);
+  const youtube = useStore(controller.youtube);
+  const meters = useStore(controller.meters);
+  const obsStatus = useStore(controller.obs).status;
+  const { volume, audioSource } = settings.video;
+  const setRules = (patch: Partial<RequestRules>) => controller.updateSettings((s) => ({ ...s, rules: { ...s.rules, ...patch } }));
+  const setVideo = (patch: Partial<typeof settings.video>) => controller.updateSettings((s) => ({ ...s, video: { ...s.video, ...patch } }));
+  const names = Object.keys(meters);
+  if (audioSource && !names.includes(audioSource)) names.unshift(audioSource);
+
+  let status = '';
+  let tone = 'muted';
+  if (obsStatus === 'connected' && !audioSource) {
+    if (youtube.overlaySource && youtube.overlayAudio) {
+      status = t('settings.video.audio.found', { name: youtube.overlaySource });
+      tone = 'good';
+    } else if (youtube.overlaySource) status = t('settings.video.audio.noAudio', { name: youtube.overlaySource });
+    else status = t('settings.video.audio.notFound');
+  }
+
+  return (
+    <Section title={t('settings.video')} help={t('settings.video.help')}>
+      <NumberField label={t('settings.video.price')} value={settings.rules.videoPrice} step={50} onChange={(videoPrice) => setRules({ videoPrice })} />
+      <NumberField
+        label={t('settings.video.maxDuration')}
+        value={settings.rules.videoMaxDurationMin}
+        onChange={(videoMaxDurationMin) => setRules({ videoMaxDurationMin })}
+      />
+      <label class="field">
+        <span>
+          {t('settings.video.volume')} — {volume}%
+        </span>
+        <input
+          class="range"
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={volume}
+          style={{ '--v': `${volume}%` }}
+          onInput={(e) => setVideo({ volume: Number(e.currentTarget.value) })}
+        />
+      </label>
+      <label class="field">
+        <span>{t('settings.video.audio')}</span>
+        <select value={audioSource} onChange={(e) => setVideo({ audioSource: e.currentTarget.value })}>
+          <option value="">{t('settings.video.audio.auto')}</option>
+          {names.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {status && <p class={`small ${tone}`}>{status}</p>}
+      <div class="field">
+        <span>{t('settings.video.account')}</span>
+        <div class="row-actions">
+          <button class="btn" onClick={controller.signInYouTube}>
+            {t('settings.video.signIn')}
+          </button>
+        </div>
+        <p class={`small ${youtube.ads ? 'bad' : 'muted'}`}>
+          {youtube.ads ? t('settings.video.adsSeen', { n: youtube.ads }) : t('settings.video.signIn.hint')}
+        </p>
+      </div>
+      <label class="check">
+        <input type="checkbox" checked={settings.video.skipAds} onChange={(e) => setVideo({ skipAds: e.currentTarget.checked })} />
+        <span>{t('settings.video.skipAds')}</span>
+      </label>
+    </Section>
   );
 }
 
@@ -268,6 +346,7 @@ function TwitchSection({ controller }: { controller: DockController }) {
       <Section title={t('settings.twitch')} help={t('settings.twitch.help')}>
         <p class={`small ${info.status === 'ok' ? 'good' : info.status === 'connecting' ? '' : 'bad'}`}>{twitchStatusText(info)}</p>
         {info.status === 'ok' && <p class={`small ${info.reward?.paused === false ? '' : 'muted'}`}>{rewardText(info)}</p>}
+        {info.status === 'ok' && <p class={`small ${info.videoReward?.paused === false ? '' : 'muted'}`}>{videoRewardText(info)}</p>}
         <div class="row-actions">
           <button class="btn" onClick={controller.disconnectTwitch}>
             {t('settings.twitch.disconnect')}
@@ -333,6 +412,12 @@ function twitchStatusText(info: TwitchInfo): string {
 function rewardText(info: TwitchInfo): string {
   if (!info.reward) return t('settings.twitch.reward.none');
   return info.reward.paused ? t('settings.twitch.reward.paused') : t('settings.twitch.reward.active', { cost: info.reward.cost });
+}
+
+function videoRewardText(info: TwitchInfo): string {
+  const reward = info.videoReward;
+  if (!reward) return t('settings.twitch.videoReward.none');
+  return reward.paused ? t('settings.twitch.videoReward.paused') : t('settings.twitch.videoReward.active', { cost: reward.cost });
 }
 
 function twitchLoginErrorText(code: string): string {

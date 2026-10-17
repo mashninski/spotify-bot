@@ -8,6 +8,8 @@ import * as q from '../core/queue';
 import { loadSettings, safeLocalStorage, saveSettings, SETTINGS_KEY, type Settings } from '../core/settings';
 import { createStore } from '../core/store';
 import type { PlayerState } from '../core/types';
+import type { VideoReport } from '../core/video';
+import type { FetchLike as YouTubeFetch, VideoProbe } from '../youtube/lookup';
 import { createBrain, type Brain } from './brain';
 import {
   Bus,
@@ -18,6 +20,8 @@ import {
   type Notice,
   type ObsInfo,
   type PageKind,
+  initialYouTubeInfo,
+  type YouTubeInfo,
 } from './bus';
 import { electLeader, getLockManager, type LeaderElection, type LockManagerLike } from './leader';
 import { loadPlayer } from './persist';
@@ -52,6 +56,11 @@ export interface BrainNodeOptions {
   /** Падмена Twitch (тэсты). */
   twitchFetch?: TwitchFetch;
   createSocket?: SocketFactory;
+  /** Падмена YouTube (тэсты): oEmbed і схаваны плэер. */
+  youtubeFetch?: YouTubeFetch;
+  videoProbe?: VideoProbe;
+  videoSilenceMs?: number;
+  videoStartMs?: number;
 }
 
 export function createBrainNode(options: BrainNodeOptions) {
@@ -72,6 +81,8 @@ export function createBrainNode(options: BrainNodeOptions) {
   const spotify = createStore<SpotifyInfo>(initialSpotifyInfo(hasTokens(storage) ? 'connecting' : 'off'));
   /** Стан падключэння да Twitch (ADR-018). */
   const twitch = createStore<TwitchInfo>(initialTwitchInfo(hasTwitchTokens(storage) ? 'connecting' : 'off'));
+  /** Відэа YouTube (ADR-020): плэер у оверлэі і гук відэа для хвалі. */
+  const youtube = createStore<YouTubeInfo>(initialYouTubeInfo());
   /** Хто зараз лідар (`null` — невядома або нікога няма). */
   const leader = createStore<LeaderInfo | null>(null);
   /** Колькі разоў заўважаны іншы лідар, калі лідар — гэтая старонка (не павінна быць ніколі). */
@@ -85,7 +96,7 @@ export function createBrainNode(options: BrainNodeOptions) {
   const leaderStopFns: (() => void)[] = [];
 
   function snapshot(info: LeaderInfo): BrainSnapshot {
-    return { leader: info, player: { ...player.get(), history: [] }, obs: obs.get(), channel: channel.get(), spotify: spotify.get(), twitch: twitch.get() };
+    return { leader: info, player: { ...player.get(), history: [] }, obs: obs.get(), channel: channel.get(), spotify: spotify.get(), twitch: twitch.get(), youtube: youtube.get() };
   }
 
   function postSnapshot(): void {
@@ -115,13 +126,17 @@ export function createBrainNode(options: BrainNodeOptions) {
     brain = createBrain({
       id,
       storage,
-      stores: { settings, player, obs, channel, meters, notice, spotify, twitch },
+      stores: { settings, player, obs, channel, meters, notice, spotify, twitch, youtube },
       updateSettings,
       onObsEvent: options.onObsEvent,
       demo: options.demo,
       fetch: options.fetch,
       twitchFetch: options.twitchFetch,
       createSocket: options.createSocket,
+      youtubeFetch: options.youtubeFetch,
+      videoProbe: options.videoProbe,
+      videoSilenceMs: options.videoSilenceMs,
+      videoStartMs: options.videoStartMs,
     });
     const heartbeat = setInterval(postSnapshot, SNAPSHOT_HEARTBEAT_MS);
     leaderStopFns.push(
@@ -130,6 +145,7 @@ export function createBrainNode(options: BrainNodeOptions) {
       channel.subscribe(scheduleSnapshot),
       spotify.subscribe(scheduleSnapshot),
       twitch.subscribe(scheduleSnapshot),
+      youtube.subscribe(scheduleSnapshot),
       meters.subscribe((m) => bus.post({ kind: 'meters', meters: m })),
       notice.subscribe((n) => n && bus.post({ kind: 'notice', notice: n })),
       () => clearInterval(heartbeat),
@@ -146,6 +162,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     channel.set(s.channel);
     if (s.spotify) spotify.set(s.spotify);
     if (s.twitch) twitch.set(s.twitch);
+    if (s.youtube) youtube.set(s.youtube);
   }
 
   function command(c: Command): void {
@@ -165,6 +182,7 @@ export function createBrainNode(options: BrainNodeOptions) {
     notice,
     spotify,
     twitch,
+    youtube,
     leader,
     conflicts,
 
@@ -237,6 +255,10 @@ export function createBrainNode(options: BrainNodeOptions) {
     disconnectSpotify: () => command({ type: 'spotify-disconnect' }),
     disconnectTwitch: () => command({ type: 'twitch-disconnect' }),
     setVolume: (value: number) => command({ type: 'volume', value }),
+    /** Плэер відэа ў оверлэі паведамляе лідару пра ход відэа (ADR-020). */
+    reportVideo: (report: VideoReport) => command({ type: 'video-report', ...report }),
+    /** Оверлэй паведамляе пра сябе: ці ён грае з гукам і якая ў яго версія. */
+    reportOverlay: (owner: boolean, version: string) => command({ type: 'overlay-status', id, owner, version }),
   };
 }
 

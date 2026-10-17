@@ -2,6 +2,7 @@
 // Працуе праз BroadcastChannel — у OBS 32 ён агульны для дока і Browser Source (праверана аўтарам).
 
 import type { PlayerState } from '../core/types';
+import type { VideoPlayerState, VideoReport } from '../core/video';
 import type { ObsChannelMode } from '../obs/channel';
 import type { ObsStatus } from '../obs/client';
 import type { SpotifyInfo } from '../providers/spotify/sync';
@@ -35,6 +36,37 @@ export interface ChannelInfo {
   lastError: string;
 }
 
+/** Відэа YouTube (ADR-020): ці жывы плэер у оверлэі і па якой крыніцы OBS хваля рэагуе на гук відэа. */
+export interface YouTubeInfo {
+  /** Калі плэер у оверлэі апошні раз паведамляў пра сябе (0 — не бачылі). */
+  playerSeenAt: number;
+  /** Крыніца OBS з оверлэем (`''` — не знойдзена або OBS не падключаны). */
+  overlaySource: string;
+  /** У гэтай крыніцы ўключана «Управлять звуком через OBS» — хваля бачыць гук відэа. */
+  overlayAudio: boolean;
+  /** Колькі разоў YouTube уключаў рэкламу перад відэа (з запуску бота) і калі апошні раз — па гэтым правяраем Premium. */
+  ads: number;
+  lastAdAt: number;
+  /** Адкрытыя оверлэі (паведамлялі пра сябе за апошнія 15 с): колькі, колькі з гукам, якіх версій. */
+  overlays: number;
+  soundOverlays: number;
+  overlayVersions: string;
+  /** Апошняя прычына, чаму відэа не паказалася (для «Стану»). */
+  lastError?: string;
+  lastErrorAt?: number;
+}
+
+export const initialYouTubeInfo = (): YouTubeInfo => ({
+  playerSeenAt: 0,
+  overlaySource: '',
+  overlayAudio: false,
+  ads: 0,
+  lastAdAt: 0,
+  overlays: 0,
+  soundOverlays: 0,
+  overlayVersions: '',
+});
+
 export interface Notice {
   id: number;
   text: string;
@@ -57,7 +89,11 @@ export type Command =
   /** Адключыць Twitch: узнагарода — на паўзу, токены выдаляюцца. */
   | { type: 'twitch-disconnect' }
   /** Гучнасць Spotify 0…100. */
-  | { type: 'volume'; value: number };
+  | { type: 'volume'; value: number }
+  /** Плэер відэа ў оверлэі паведамляе пра ход відэа (ADR-020). */
+  | ({ type: 'video-report' } & VideoReport)
+  /** Оверлэй паведамляе пра сябе раз у 5 с: колькі оверлэяў адкрыта, які з гукам, якая версія. */
+  | { type: 'overlay-status'; id: string; owner: boolean; version: string };
 
 /** Усё, што лідар паказвае іншым старонкам. Гісторыя песень не перадаецца — яна патрэбна толькі лідару. */
 export interface BrainSnapshot {
@@ -67,6 +103,7 @@ export interface BrainSnapshot {
   channel: ChannelInfo;
   spotify: SpotifyInfo;
   twitch: TwitchInfo;
+  youtube?: YouTubeInfo;
 }
 
 export type BusMessage =
@@ -102,6 +139,8 @@ const SIMPLE_COMMANDS = new Set([
   'twitch-disconnect',
 ]);
 
+const VIDEO_STATES: VideoPlayerState[] = ['loading', 'playing', 'paused', 'buffering', 'ended', 'error', 'idle', 'ad'];
+
 export function parseCommand(raw: unknown): Command | null {
   if (!isObject(raw) || typeof raw.type !== 'string') return null;
   if (SIMPLE_COMMANDS.has(raw.type)) return { type: raw.type } as Command;
@@ -110,6 +149,15 @@ export function parseCommand(raw: unknown): Command | null {
   }
   if (raw.type === 'volume' && typeof raw.value === 'number' && Number.isFinite(raw.value)) {
     return { type: 'volume', value: Math.max(0, Math.min(100, Math.round(raw.value))) };
+  }
+  if (raw.type === 'overlay-status' && typeof raw.id === 'string' && typeof raw.version === 'string') {
+    return { type: 'overlay-status', id: raw.id.slice(0, 40), owner: raw.owner === true, version: raw.version.slice(0, 40) };
+  }
+  if (raw.type === 'video-report' && typeof raw.key === 'string' && VIDEO_STATES.includes(raw.state)) {
+    const positionMs = typeof raw.positionMs === 'number' && Number.isFinite(raw.positionMs) ? Math.max(0, raw.positionMs) : 0;
+    const report: Command = { type: 'video-report', key: raw.key, state: raw.state, positionMs };
+    if (typeof raw.code === 'number') report.code = raw.code;
+    return report;
   }
   return null;
 }

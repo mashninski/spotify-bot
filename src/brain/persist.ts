@@ -2,7 +2,7 @@
 // дзе спыніўся папярэдні (док зачынены, оверлей перазагружаны, OBS перазапушчаны).
 
 import * as q from '../core/queue';
-import type { PlayerState, QueueItem, Track } from '../core/types';
+import type { PlayerState, QueueItem, SpotifyResume, Track, VideoState } from '../core/types';
 
 export const PLAYER_KEY = 'spotify-bot:player:v1';
 
@@ -37,8 +37,8 @@ export function loadPlayer(storage: StorageLike | null, now = Date.now()): Playe
   if (!isObject(raw) || typeof raw.savedAt !== 'number') return null;
   const state = parseState(raw.state);
   if (!state) return null;
-  // Песні са Spotify мяняе сам Spotify (ADR-016) — толькі прасоўваем час, наступную скажа апытанне.
-  const advance = state.current?.track.uri ? q.advanceProgress : q.tick;
+  // Песні са Spotify мяняе сам Spotify (ADR-016), відэа — плэер оверлэя (ADR-020): толькі прасоўваем час.
+  const advance = state.current?.track.uri || state.current?.track.source === 'youtube' ? q.advanceProgress : q.tick;
   return advance(state, Math.max(0, now - raw.savedAt));
 }
 
@@ -49,9 +49,32 @@ function parseTrack(raw: unknown): Track | null {
   const { id, title, artist, durationMs, explicit } = raw;
   if (typeof id !== 'string' || typeof title !== 'string' || typeof artist !== 'string') return null;
   if (typeof durationMs !== 'number' || !(durationMs > 0) || typeof explicit !== 'boolean') return null;
-  return typeof raw.uri === 'string' && raw.uri
-    ? { id, title, artist, durationMs, explicit, uri: raw.uri }
-    : { id, title, artist, durationMs, explicit };
+  const track: Track = { id, title, artist, durationMs, explicit };
+  if (typeof raw.uri === 'string' && raw.uri) track.uri = raw.uri;
+  // Відэа YouTube (ADR-020).
+  if (raw.source === 'youtube' && typeof raw.videoId === 'string' && raw.videoId) {
+    track.source = 'youtube';
+    track.videoId = raw.videoId;
+  }
+  return track;
+}
+
+const RESUMES: SpotifyResume[] = ['next', 'restart', 'none'];
+
+function parseVideo(raw: unknown, current: QueueItem | null): VideoState | null {
+  if (!isObject(raw) || typeof raw.key !== 'string' || current?.key !== raw.key || current.track.source !== 'youtube') return null;
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : 0);
+  return {
+    key: raw.key,
+    resume: RESUMES.includes(raw.resume) ? raw.resume : 'next',
+    startedAt: num(raw.startedAt),
+    reportAt: num(raw.reportAt),
+    seek: num(raw.seek),
+    spotifyPaused: raw.spotifyPaused === true,
+    started: raw.started === true,
+    ready: raw.ready === true,
+    pausePending: false,
+  };
 }
 
 function parseItem(raw: unknown): QueueItem | null {
@@ -87,6 +110,7 @@ function parseState(raw: unknown): PlayerState | null {
   if (!requests || !context || !history) return null;
   const progressMs = typeof raw.progressMs === 'number' && raw.progressMs >= 0 ? raw.progressMs : 0;
   const skip = parseSkip(raw.skip);
+  const video = parseVideo(raw.video, current);
   return {
     current,
     isPlaying: raw.isPlaying === true && current !== null,
@@ -95,5 +119,6 @@ function parseState(raw: unknown): PlayerState | null {
     context,
     history,
     ...(skip ? { skip } : {}),
+    ...(video ? { video } : {}),
   };
 }

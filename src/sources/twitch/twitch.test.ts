@@ -27,7 +27,7 @@ function setup(outcome: RequestOutcome = { ok: true, title: 'Песня', n: 1 }
     createSocket: twitch.createSocket,
     now: () => clock,
     price: () => 1000,
-    readiness: () => readiness,
+    readiness: (kind) => (kind === 'song' ? readiness : 'ready'),
     onRedemption: async (r) => {
       handled.push(r.query);
       // Як мозг: прыняты заказ — у чарзе з сувяззю з выкупам.

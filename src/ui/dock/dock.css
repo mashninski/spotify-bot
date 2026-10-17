@@ -591,3 +591,41 @@ select:focus {
 .test-btn:focus-visible {
   opacity: 1;
 }
+
+/* Значок крыніцы (Spotify / YouTube) перад назвай песні або відэа (ADR-020). */
+.source {
+  display: inline-flex;
+  vertical-align: -1px;
+  margin-right: 6px;
+}
+
+/* Паўзунок у наладах (гучнасць відэа). */
+.field input.range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  margin: 8px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  outline: none;
+  background: linear-gradient(to right, var(--green) var(--v), var(--panel-2) var(--v));
+  cursor: pointer;
+}
+.field input.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+/* Кнопка «+» і галачка «ужо ў Любімых» — аднаго памеру, а радок назвы — пастаяннай вышыні (і ў відэа, дзе кнопкі няма):
+   пры змене песні Spotify спачатку не ведае, ці песня ў «Любімых», — без гэтага плэер скакаў на 6 px. */
+.now-head {
+  min-height: 28px;
+}
+.icon-btn.like {
+  width: 28px;
+  height: 28px;
+}

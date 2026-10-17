@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173, "url": "http://127.0.0.1:5173" }
+    { "name": "dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173, "url": "http://127.0.0.1:5173" },
+    { "name": "dev-alt", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--port", "5181"], "port": 5181, "url": "http://127.0.0.1:5181" }
   ]
 }

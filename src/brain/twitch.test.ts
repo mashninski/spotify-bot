@@ -74,11 +74,14 @@ afterEach(() => {
 });
 
 describe('Twitch: падключэнне і ўзнагарода', () => {
-  it('бот стварае ўзнагароду «Замовіць песню» з коштам з правілаў і падпісваецца на заказы', async () => {
+  it('бот стварае ўзнагароды «Замовіць песню» і «Замовіць відэа з YouTube» з коштам з правілаў і падпісваецца на заказы', async () => {
     const { make, twitch } = setup();
     const dock = make('dock');
     await ready(twitch);
-    expect(twitch.state.rewards).toHaveLength(1);
+    expect(twitch.state.rewards).toHaveLength(2);
+    expect(twitch.state.rewards[1]).toMatchObject({ title: 'Замовіць відэа з YouTube', cost: 1000, is_user_input_required: true });
+    // Падпіскі — на ўсе ўзнагароды канала, без reward_id (ADR-020).
+    expect(twitch.state.subscriptions.every((s) => !s.condition.reward_id)).toBe(true);
     expect(twitch.state.rewards[0]).toMatchObject({
       title: 'Замовіць песню',
       cost: 1000,
@@ -86,7 +89,7 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
       should_redemptions_skip_request_queue: false,
     });
     await vi.waitFor(() => expect(dock.twitch.get()).toMatchObject({ status: 'ok', login: 'streamer', events: 'ok', reward: { cost: 1000 } }), WAIT);
-    expect(twitch.count('GET /channel_points/custom_rewards/redemptions')).toBe(1); // даганялка пасля падпіскі
+    expect(twitch.count('GET /channel_points/custom_rewards/redemptions')).toBe(2); // даганялка пасля падпіскі — для кожнай узнагароды
   });
 
   it('пасля перазапуску бот бярэ сваю ўзнагароду, а не стварае другую; змена цаны ідзе ў Twitch', async () => {
@@ -97,9 +100,9 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     const overlay = make('overlay');
     await vi.waitFor(() => expect(overlay.isLeader()).toBe(true), WAIT);
     await ready(twitch);
-    expect(twitch.state.rewards).toHaveLength(1);
-    overlay.updateSettings((s) => ({ ...s, rules: { ...s.rules, price: 500 } }));
-    await vi.waitFor(() => expect(twitch.state.rewards[0].cost).toBe(500), WAIT);
+    expect(twitch.state.rewards).toHaveLength(2);
+    overlay.updateSettings((s) => ({ ...s, rules: { ...s.rules, price: 500, videoPrice: 1500 } }));
+    await vi.waitFor(() => expect(twitch.state.rewards.map((r) => r.cost)).toEqual([500, 1500]), WAIT);
   });
 
   it('узнагароду са старой назвай «Заказаць песню» бот бярэ сабе і перайменоўвае', async () => {
@@ -117,7 +120,7 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     });
     make('dock');
     await ready(twitch);
-    expect(twitch.state.rewards.map((r) => r.id)).toEqual(['old-reward']);
+    expect(twitch.state.rewards.map((r) => r.id)).toEqual(['old-reward', 'reward-1']);
     await vi.waitFor(() => expect(twitch.state.rewards[0].title).toBe('Замовіць песню'), WAIT);
   });
 
@@ -128,14 +131,14 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     await vi.waitFor(() => expect(dock.twitch.get()).toMatchObject({ status: 'error', problem: 'not-affiliate' }), WAIT);
   });
 
-  it('без Spotify узнагарода на паўзе, са Spotify — зноў працуе', async () => {
+  it('без Spotify на паўзе толькі «Замовіць песню» (відэа працуе), са Spotify — абедзве', async () => {
     const { make, twitch, storage } = setup({ spotify: false });
     const dock = make('dock');
     await ready(twitch);
-    await vi.waitFor(() => expect(twitch.state.rewards[0].is_paused).toBe(true), { ...WAIT, timeout: 12_000 });
-    await vi.waitFor(() => expect(dock.twitch.get().reward).toMatchObject({ paused: true }), WAIT);
+    await vi.waitFor(() => expect(twitch.state.rewards.map((r) => r.is_paused)).toEqual([true, false]), { ...WAIT, timeout: 12_000 });
+    await vi.waitFor(() => expect(dock.twitch.get()).toMatchObject({ reward: { paused: true }, videoReward: { paused: false } }), WAIT);
     saveSpotifyTokens(storage, sampleTokens());
-    await vi.waitFor(() => expect(twitch.state.rewards[0].is_paused).toBe(false), { ...WAIT, timeout: 12_000 });
+    await vi.waitFor(() => expect(twitch.state.rewards.map((r) => r.is_paused)).toEqual([false, false]), { ...WAIT, timeout: 12_000 });
   }, 30_000);
 
   it('«Адключыць»: узнагарода на паўзе, токены выдалены', async () => {
@@ -145,7 +148,7 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     dock.disconnectTwitch();
     await vi.waitFor(() => expect(loadTokens(storage)).toBeNull(), WAIT);
     expect(dock.twitch.get().status).toBe('off');
-    expect(twitch.state.rewards[0].is_paused).toBe(true);
+    expect(twitch.state.rewards.map((r) => r.is_paused)).toEqual([true, true]);
     await new Promise((r) => setTimeout(r, 2500)); // сігнал «жывы» не падключае нанова
     expect(dock.twitch.get().status).toBe('off');
   });

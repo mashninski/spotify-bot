@@ -428,6 +428,29 @@ export function createSpotifySync(options: SpotifySyncOptions) {
       );
     },
 
+    /**
+     * Музыка пасля відэа (ADR-020): (замова — у чаргу Spotify), «наступная» `skips` разоў, (з пачатку), працягнуць.
+     * `play` на прыладзе, якая ўжо грае (Spotify сам пачынае граць пасля «наступная»), Spotify адхіляе з 403 — гэта не памылка.
+     */
+    resume({ uri, enqueue = false, skips = 0, restart = false }: { uri?: string; enqueue?: boolean; skips?: number; restart?: boolean }): Promise<boolean> {
+      return run(
+        async () => {
+          if (uri && enqueue) await api.addToQueue(uri);
+          for (let i = 0; i < skips; i++) {
+            if (i > 0) await new Promise((r) => setTimeout(r, POLL.skipGap));
+            await api.next();
+          }
+          if (restart) await api.seek(0);
+          try {
+            await api.play();
+          } catch (e) {
+            if (!(e instanceof SpotifyApiError && e.kind === 'forbidden')) throw e;
+          }
+        },
+        { until: now() + POLL.confirmFor, accept: (p) => p?.isPlaying === true && (!uri || p.track?.uri === uri) },
+      );
+    },
+
     /** Пошук трэка для заказу. Пры квоце або памылцы Spotify — `failed` (віна не гледача). */
     async search(query: string): Promise<SearchResult> {
       if (!active || now() < blockedUntil) return { ok: false, reason: 'failed' };

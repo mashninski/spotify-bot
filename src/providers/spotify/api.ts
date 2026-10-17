@@ -1,6 +1,7 @@
 // Кліент Spotify Web API (ADR-016). Выкарыстоўвае толькі лідар (ADR-015): ён жа абнаўляе токены.
 // Токены кожны раз чытаюцца з localStorage — так лідар адразу бачыць новы ўваход са старонкі вяртання.
 
+import { guarded } from '../../core/busy';
 import {
   clearTokens,
   loadTokens,
@@ -92,7 +93,7 @@ export function createSpotifyApi(options: SpotifyApiOptions) {
     if (!tokens) throw new SpotifyApiError('auth', 0, 'no-tokens');
     if (!force && !needsRefresh(tokens, now())) return tokens.accessToken;
     if (!refreshing) {
-      refreshing = refresh(tokens).finally(() => {
+      refreshing = guarded(() => refresh(tokens)).finally(() => {
         refreshing = null;
       });
     }
@@ -157,6 +158,8 @@ export function createSpotifyApi(options: SpotifyApiOptions) {
     pause: () => request('PUT', '/me/player/pause'),
     next: () => request('POST', '/me/player/next'),
     previous: () => request('POST', '/me/player/previous'),
+    /** Перамотка бягучай песні (пасля відэа — з пачатку, ADR-020). */
+    seek: (positionMs: number) => request('PUT', `/me/player/seek?position_ms=${Math.max(0, Math.round(positionMs))}`),
     /** Гучнасць Spotify на прыладзе, дзе ён грае (0…100). */
     volume: (percent: number) => request('PUT', `/me/player/volume?volume_percent=${Math.round(percent)}`),
     /** Адзін трэк па id (Этап 3б; пакетны `GET /tracks?ids=` выдалены ў лютым 2026). */
