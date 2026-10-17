@@ -29,7 +29,8 @@ import { hasTokens as hasTwitchTokens, type FetchLike as TwitchFetch } from '../
 import type { SocketFactory } from '../sources/twitch/eventsub';
 import { createTwitchLink, initialTwitchInfo, type RequestOutcome, type TwitchInfo } from '../sources/twitch/twitch';
 import { mentionsYouTube, parseYouTubeLink } from '../youtube/link';
-import { findVideo, type FetchLike as YouTubeFetch, type VideoProbe } from '../youtube/lookup';
+import { findVideo, findVideoByQuery, type FetchLike as YouTubeFetch, type VideoProbe } from '../youtube/lookup';
+import { createVideoSearch } from '../youtube/search';
 import type { ChannelInfo, Command, Notice, ObsInfo, YouTubeInfo } from './bus';
 import { loadPlayer, savePlayer } from './persist';
 
@@ -51,6 +52,8 @@ const SEND_RETRY_MS = 5000;
 const OVERLAY_SOURCE_CHECK_MS = 30_000;
 /** Відэа з мінулага запуску, пра якое плэер так даўно не паведамляў, не працягваем (OBS быў зачынены). */
 const VIDEO_STALE_ON_START_MS = 60_000;
+/** Даўжэйшы тэкст замовы для пошуку відэа абразаецца. */
+const SEARCH_QUERY_MAX = 100;
 /** Паўтор паўзы Spotify перад відэа, калі першая каманда не прайшла. */
 const PAUSE_RETRY_MS = 1500;
 /** Тэставыя відэа для «+ Тэставая замова» без Spotify. */
@@ -90,7 +93,7 @@ export interface BrainOptions {
   /** Падмена `fetch` і WebSocket для Twitch (тэсты). */
   twitchFetch?: TwitchFetch;
   createSocket?: SocketFactory;
-  /** Падмена YouTube (тэсты): oEmbed і схаваны плэер, які правярае відэа. */
+  /** Падмена YouTube (тэсты): oEmbed, пошук праз люстэркі і схаваны плэер, які правярае відэа. */
   youtubeFetch?: YouTubeFetch;
   videoProbe?: VideoProbe;
   /** Колькі плэер оверлэя можа маўчаць, пакуль відэа не лічыцца страчаным (тэсты — менш). */
@@ -107,6 +110,7 @@ export function createBrain(options: BrainOptions) {
   const sender = new OverlaySender();
   const envelope = createEnvelopeFactory(options.id);
   const youtubeFetch: YouTubeFetch = options.youtubeFetch ?? ((url, init) => fetch(url, init));
+  const videoSearch = createVideoSearch({ fetch: youtubeFetch });
   /** Схаваны плэер для праверкі відэа — толькі ў браўзеры (загружаецца, калі спатрэбіцца). */
   const videoProbe: VideoProbe =
     options.videoProbe ??
@@ -688,10 +692,14 @@ export function createBrain(options: BrainOptions) {
   async function findTrack(request: SongRequest, kind: RequestKind): Promise<{ track: Track } | RequestOutcome | null> {
     if (kind === 'video') {
       const videoId = parseYouTubeLink(request.query);
-      if (!videoId) return { ok: false, reason: 'not-youtube', video: true };
-      const found = await findVideo(videoId, { fetch: youtubeFetch, probe: videoProbe });
-      if (!running) return null;
-      return found.ok ? { track: found.track } : { ok: false, reason: found.reason, video: true };
+      if (videoId) {
+        const found = await findVideo(videoId, { fetch: youtubeFetch, probe: videoProbe });
+        if (!running) return null;
+        return found.ok ? { track: found.track } : { ok: false, reason: found.reason, video: true };
+      }
+      // Спасылка на YouTube, але не на відэа (канал, плэйліст) — шукаць няма чаго.
+      if (mentionsYouTube(request.query)) return { ok: false, reason: 'not-youtube', video: true };
+      return searchVideo(request.query.trim());
     }
     // Спасылка на YouTube ва ўзнагародзе песні — падказка, што для відэа ёсць свая ўзнагарода.
     if (request.redemptionId && mentionsYouTube(request.query)) return { ok: false, reason: 'youtube-link' };
@@ -706,6 +714,26 @@ export function createBrain(options: BrainOptions) {
     const track = await provider.searchTrack(request.query);
     if (!running) return null;
     return track ? { track } : { ok: false, reason: 'not-found' };
+  }
+
+  /** Відэа па назве (B-032): першае прыдатнае з пошуку. Ліміт даўжыні — з налад, дублі і ліміт гледача — як заўсёды. */
+  async function searchVideo(query: string): Promise<{ track: Track } | RequestOutcome | null> {
+    const max = settings.get().rules.videoMaxDurationMin;
+    const found = await findVideoByQuery(query.slice(0, SEARCH_QUERY_MAX), {
+      fetch: youtubeFetch,
+      probe: videoProbe,
+      search: async (q) => {
+        const result = await videoSearch.search(q);
+        if (running) {
+          const patch = result.ok ? { searchMirror: videoSearch.lastMirror(), searchFailedAt: 0 } : { searchFailedAt: Date.now() };
+          stores.youtube.set((s) => ({ ...s, ...patch }));
+        }
+        return result;
+      },
+      maxDurationMs: max * 60_000,
+    });
+    if (!running) return null;
+    return found.ok ? { track: found.track } : { ok: false, reason: found.reason, video: true, max };
   }
 
   async function findAndAdd(request: SongRequest): Promise<RequestOutcome | null> {
@@ -744,6 +772,10 @@ export function createBrain(options: BrainOptions) {
         return rejectText(outcome.reason, user, outcome.title ?? '');
       case 'empty':
         return t('player.emptyRequest', { user });
+      case 'video-search-none':
+      case 'video-search-unsuitable':
+      case 'video-search-failed':
+        return t(`player.video.${outcome.reason}`, { user, query, max: outcome.max ?? 0 });
       case 'not-youtube':
       case 'youtube-link':
       case 'video-not-found':

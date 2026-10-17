@@ -61,6 +61,8 @@ export interface Reward {
   id: string;
   title: string;
   cost: number;
+  /** Падказка гледачу ў акне ўзнагароды. */
+  prompt?: string;
   isPaused: boolean;
   isEnabled: boolean;
 }
@@ -82,6 +84,7 @@ export function parseReward(raw: unknown): Reward | null {
     id: raw.id,
     title: typeof raw.title === 'string' ? raw.title : '',
     cost: typeof raw.cost === 'number' ? raw.cost : 0,
+    prompt: typeof raw.prompt === 'string' ? raw.prompt : undefined,
     isPaused: raw.is_paused === true,
     isEnabled: raw.is_enabled !== false,
   };

@@ -51,6 +51,10 @@ export type RefundReason =
   /** Трансляцыя або прэм’ера. */
   | 'live'
   | 'youtube-failed'
+  /** Замова па назве (B-032): нічога не знайшлося / нічога нельга паказаць / пошук не працуе. */
+  | 'video-search-none'
+  | 'video-search-unsuitable'
+  | 'video-search-failed'
   /** Відэа так і не паказалася ў оверлэі. */
   | 'video-error'
   /** YouTube уключыў рэкламу перад відэа — відэа не паказваем (ADR-020). */

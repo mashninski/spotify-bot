@@ -124,6 +124,30 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     await vi.waitFor(() => expect(twitch.state.rewards[0].title).toBe('Замовіць песню'), WAIT);
   });
 
+  it('старая падказка ўзнагароды відэа («толькі спасылка») абнаўляецца: можна і назву (B-032)', async () => {
+    const { make, twitch } = setup();
+    twitch.state.rewards.push({
+      id: 'video-reward',
+      title: 'Замовіць відэа з YouTube',
+      cost: 1000,
+      prompt: 'Спасылка на відэа YouTube. Калі відэа нельга паказаць на стрыме, балы вернуцца',
+      is_paused: false,
+      is_enabled: true,
+      is_user_input_required: true,
+      should_redemptions_skip_request_queue: false,
+      managed: true,
+    });
+    make('dock');
+    await ready(twitch);
+    await vi.waitFor(
+      () =>
+        expect(twitch.state.rewards.find((r) => r.id === 'video-reward')?.prompt).toBe(
+          'Спасылка на відэа YouTube або яго назва. Калі відэа нельга паказаць на стрыме, балы вернуцца',
+        ),
+      WAIT,
+    );
+  });
+
   it('канал без балаў канала — зразумелая памылка', async () => {
     const { make, twitch } = setup();
     twitch.state.affiliate = false;

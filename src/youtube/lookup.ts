@@ -1,8 +1,10 @@
 // Праверка відэа для замовы (ADR-020): назва і канал — з oEmbed, даўжыня і ці можна ўбудаваць — са схаванага плэера.
+// Замова па назве (B-032): пошук праз люстэркі (`search.ts`), потым тая ж праверка для першых вынікаў.
 // Без ключоў і платных сэрвісаў. Плэер падстаўляецца звонку (`probe`), каб логіку можна было тэставаць без браўзера.
 
 import type { Track } from '../core/types';
 import { watchUrl } from './link';
+import type { SearchResult } from './search';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -55,6 +57,53 @@ async function oembed(fetchFn: FetchLike, videoId: string): Promise<OEmbed | Vid
   } catch {
     return null;
   }
+}
+
+/** Колькі вынікаў пошуку правяраць плэерам, перш чым адмовіць. */
+export const SEARCH_CHECK_LIMIT = 5;
+
+export type SearchFailure =
+  /** Па запыце нічога не знайшлося. */
+  | 'video-search-none'
+  /** Знайшлося, але ніводнае відэа нельга паказаць (задоўгае, трансляцыя, забарона ўбудавання). */
+  | 'video-search-unsuitable'
+  /** Пошук не працуе: ніводнае люстэрка не адказала. */
+  | 'video-search-failed'
+  | 'youtube-failed';
+
+export type VideoQueryLookup = { ok: true; track: Track } | { ok: false; reason: SearchFailure };
+
+/**
+ * Відэа па назве (B-032): першае з вынікаў пошуку, якое можна паказаць на стрыме і не даўжэйшае за `maxDurationMs`.
+ * Відавочна непрыдатныя (трансляцыі, задоўгія — па даных люстэрка) адсейваюцца без плэера.
+ */
+export async function findVideoByQuery(
+  query: string,
+  deps: { fetch: FetchLike; probe: VideoProbe; search: (query: string) => Promise<SearchResult>; maxDurationMs: number },
+): Promise<VideoQueryLookup> {
+  const result = await deps.search(query);
+  if (!result.ok) return { ok: false, reason: 'video-search-failed' };
+  if (result.hits.length === 0) return { ok: false, reason: 'video-search-none' };
+  const seen = new Set<string>();
+  const candidates = result.hits.filter((hit) => {
+    if (seen.has(hit.videoId)) return false;
+    seen.add(hit.videoId);
+    return !hit.live && (hit.durationS === null || hit.durationS * 1000 <= deps.maxDurationMs);
+  });
+  let youtubeDown = false;
+  for (const hit of candidates.slice(0, SEARCH_CHECK_LIMIT)) {
+    const found = await findVideo(hit.videoId, deps);
+    if (found.ok) {
+      if (found.track.durationMs > deps.maxDurationMs) continue;
+      return { ok: true, track: { ...found.track, title: found.track.title || hit.title, artist: found.track.artist || hit.author } };
+    }
+    if (found.reason === 'youtube-failed') {
+      // Плэер не адказаў — наступныя таксама не адкажуць.
+      youtubeDown = true;
+      break;
+    }
+  }
+  return { ok: false, reason: youtubeDown ? 'youtube-failed' : 'video-search-unsuitable' };
 }
 
 /** Знайсці відэа і праверыць, што яго можна паказаць на стрыме. */

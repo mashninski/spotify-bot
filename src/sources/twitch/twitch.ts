@@ -477,6 +477,9 @@ export function createTwitchLink(options: TwitchLinkOptions) {
     if (reward.cost !== cost) patch.cost = cost;
     const title = t(SPECS[kind].title);
     if (reward.title !== title) patch.title = title;
+    // Падказка змянілася з новай версіяй (напрыклад, відэа можна замаўляць і па назве, B-032).
+    const prompt = t(SPECS[kind].prompt);
+    if (reward.prompt !== undefined && reward.prompt !== prompt) patch.prompt = prompt;
     const ready = options.readiness(kind) === 'ready';
     if (ready !== lastReady[kind]) {
       lastReady[kind] = ready;
@@ -525,6 +528,7 @@ export function createTwitchLink(options: TwitchLinkOptions) {
           ...reward,
           ...('cost' in patch ? { cost: patch.cost as number } : {}),
           ...('title' in patch ? { title: patch.title as string } : {}),
+          ...('prompt' in patch ? { prompt: patch.prompt as string } : {}),
           ...('is_paused' in patch ? { isPaused: patch.is_paused as boolean } : {}),
         },
       );

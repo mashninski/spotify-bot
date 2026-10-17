@@ -54,6 +54,9 @@ export interface YouTubeInfo {
   /** Апошняя прычына, чаму відэа не паказалася (для «Стану»). */
   lastError?: string;
   lastErrorAt?: number;
+  /** Пошук відэа па назве (B-032): люстэрка, якое адказала апошнім, і калі пошук апошні раз не працаваў. */
+  searchMirror?: string;
+  searchFailedAt?: number;
 }
 
 export const initialYouTubeInfo = (): YouTubeInfo => ({

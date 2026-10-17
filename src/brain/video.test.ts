@@ -36,8 +36,29 @@ const VIDEOS: Record<string, FakeVideo> = {
 };
 const link = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 
+/** Вынікі пошуку на люстэрку (Piped): запыт → відэа па парадку. Даўжыня ў выніках — з `VIDEOS`, калі не `hideDuration`. */
+const SEARCH: Record<string, string[]> = {
+  'rick astley': ['livestream0', 'longlonglon', 'noembed0000', 'dQw4w9WgXcQ', '9bZkp7q19f0'],
+  'gangnam style': ['9bZkp7q19f0'],
+  'толькі дрэннае': ['noembed0000', 'longlonglon'],
+};
+
 function createFakeYouTube() {
+  const state = { searchDown: false, hideDuration: false, searches: [] as string[], probes: [] as string[] };
   const fetch: FetchLike = async (url) => {
+    const u = new URL(url);
+    if (u.pathname.endsWith('/instances.json')) return new Response('[]', { status: 200 });
+    if (u.pathname.endsWith('/search')) {
+      if (state.searchDown) throw new TypeError('Failed to fetch');
+      const q = u.searchParams.get('q') ?? '';
+      state.searches.push(q);
+      const items = (SEARCH[q.toLowerCase()] ?? []).map((id) => {
+        const v = VIDEOS[id];
+        const duration = v.live ? -1 : state.hideDuration ? undefined : Math.round(v.durationMs / 1000);
+        return { url: `/watch?v=${id}`, type: 'stream', title: v.title, uploaderName: v.author, duration };
+      });
+      return new Response(JSON.stringify({ items }), { status: 200 });
+    }
     const id = new URL(new URL(url).searchParams.get('url') ?? '').searchParams.get('v') ?? '';
     const video = VIDEOS[id];
     const status = video ? (video.oembed ?? 200) : 400;
@@ -45,12 +66,13 @@ function createFakeYouTube() {
     return new Response(JSON.stringify({ title: video.title, author_name: video.author }), { status: 200 });
   };
   const probe = async (id: string): Promise<ProbeResult> => {
+    state.probes.push(id);
     const video = VIDEOS[id];
     if (!video) return { status: 'error', code: 150 };
     if (video.error) return { status: 'error', code: video.error };
     return { status: 'ok', durationMs: video.durationMs, title: video.title, live: video.live === true, playable: true };
   };
-  return { fetch, probe };
+  return { fetch, probe, state };
 }
 
 let counter = 0;
@@ -83,7 +105,7 @@ function setup(opts: { silenceMs?: number; startMs?: number; spotify?: boolean }
     node.start();
     return node;
   };
-  return { storage, spotify, twitch, make };
+  return { storage, spotify, twitch, youtube, make };
 }
 
 /** Бот падключыўся да Twitch: абедзве ўзнагароды ёсць, падпіскі на жывым злучэнні. */
@@ -230,12 +252,68 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
       [link('noembed0000'), '@u2 гэтае відэа нельга паказаць на стрыме, балы вернуты'],
       [link('livestream0'), '@u3 трансляцыі не прымаюцца, балы вернуты'],
       [link('aaaaaaaaaaa'), '@u4 такога відэа на YouTube няма, балы вернуты'],
-      ['Rick Astley Never Gonna Give You Up', '@u5 дашлі спасылку на відэа YouTube, балы вернуты'],
+      ['https://www.youtube.com/@RickAstleyYT', '@u5 дашлі спасылку на відэа YouTube або яго назву, балы вернуты'],
     ];
     const ids = cases.map(([input], i) => twitch.redeem(`u${i + 1}`, input, { rewardId: reward }).id);
     await vi.waitFor(() => expect(ids.map((id) => twitch.statusOf(id))).toEqual(cases.map(() => 'CANCELED')), WAIT);
     await vi.waitFor(() => expect([...twitch.state.chat].sort()).toEqual(cases.map(([, chat]) => chat).sort()), WAIT);
     expect(dock.player.get().requests).toHaveLength(0);
+  });
+
+  it('па назве: першае прыдатнае відэа; трансляцыі і задоўгія адсеяны без плэера; дубль па назве', async () => {
+    const { make, twitch, youtube } = setup();
+    const dock = make('dock');
+    await ready(twitch, dock);
+    const reward = videoReward(twitch);
+    const r = twitch.redeem('Kasia', '  Rick Astley ', { rewardId: reward });
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
+    expect(dock.player.get().requests[0]).toMatchObject({ requestedBy: 'Kasia', redemptionId: r.id, track: { videoId: 'dQw4w9WgXcQ', title: 'Rick Astley - Never Gonna Give You Up' } });
+    expect(youtube.state.searches).toEqual(['Rick Astley']);
+    // Трансляцыю і задоўгае люстэрка адсеяла само, `noembed0000` адхіліў плэер.
+    expect(youtube.state.probes).toEqual(['noembed0000', 'dQw4w9WgXcQ']);
+    // Тое ж па назве ад іншага гледача — першае прыдатнае ўжо ў чарзе: дубль.
+    const dup = twitch.redeem('Ales', 'rick astley', { rewardId: reward });
+    await vi.waitFor(() => expect(twitch.statusOf(dup.id)).toBe('CANCELED'), WAIT);
+    await vi.waitFor(
+      () =>
+        expect(twitch.state.chat).toEqual([
+          '@Kasia відэа «Rick Astley - Never Gonna Give You Up» стала ў чаргу',
+          '@Ales «Rick Astley - Never Gonna Give You Up» ужо ў чарзе, балы вернуты',
+        ]),
+      WAIT,
+    );
+    expect(dock.youtube.get().searchMirror).toBeTruthy();
+  });
+
+  it('па назве: нічога не знайшлося, нічога нельга паказаць, пошук не працуе', async () => {
+    const { make, twitch, youtube } = setup();
+    const dock = make('dock');
+    await ready(twitch, dock);
+    const reward = videoReward(twitch);
+    // Люстэрка не ведае даўжыні — задоўгае адсейвае плэер.
+    youtube.state.hideDuration = true;
+    const none = twitch.redeem('u1', 'асдфгх', { rewardId: reward });
+    await vi.waitFor(() => expect(twitch.statusOf(none.id)).toBe('CANCELED'), WAIT);
+    const bad = twitch.redeem('u2', 'толькі дрэннае', { rewardId: reward });
+    await vi.waitFor(() => expect(twitch.statusOf(bad.id)).toBe('CANCELED'), WAIT);
+    expect(youtube.state.probes).toEqual(['noembed0000', 'longlonglon']);
+    youtube.state.searchDown = true;
+    const down = twitch.redeem('u3', 'gangnam style', { rewardId: reward });
+    await vi.waitFor(() => expect(twitch.statusOf(down.id)).toBe('CANCELED'), WAIT);
+    await vi.waitFor(
+      () =>
+        expect(twitch.state.chat).toEqual([
+          '@u1 па запыце «асдфгх» на YouTube нічога няма, балы вернуты',
+          '@u2 па запыце «толькі дрэннае» няма відэа, якое можна паказаць на стрыме (да 12 хв), балы вернуты',
+          '@u3 пошук на YouTube зараз не працуе, дашлі спасылку на відэа, балы вернуты',
+        ]),
+      WAIT,
+    );
+    expect(dock.youtube.get().searchFailedAt).toBeGreaterThan(0);
+    expect(dock.player.get().requests).toHaveLength(0);
+    // Спасылкі працуюць і без пошуку.
+    twitch.redeem('u4', link('9bZkp7q19f0'), { rewardId: reward });
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
   });
 
   it('ліміт агульны для песень і відэа; дубль відэа; спасылка YouTube ва ўзнагародзе песні', async () => {

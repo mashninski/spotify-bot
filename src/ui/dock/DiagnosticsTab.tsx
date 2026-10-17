@@ -47,6 +47,11 @@ function YouTubeBlock({ controller }: { controller: DockController }) {
       <Row label={t('diag.youtube.ads')} tone={youtube.ads ? 'bad' : 'good'}>
         {youtube.ads ? `${youtube.ads} · ${clock(youtube.lastAdAt)}` : 0}
       </Row>
+      {youtube.searchMirror || youtube.searchFailedAt ? (
+        <Row label={t('diag.youtube.search')} tone={youtube.searchFailedAt ? 'bad' : 'good'}>
+          {youtube.searchFailedAt ? t('diag.youtube.search.failed', { time: clock(youtube.searchFailedAt) }) : youtube.searchMirror}
+        </Row>
+      ) : null}
       {youtube.lastError && youtube.lastErrorAt ? (
         <>
           <Row label={t('diag.youtube.lastError')} tone="bad">
