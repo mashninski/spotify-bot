@@ -54,7 +54,7 @@ Explicit — песні з пазнакай ненарматыўнага зме�
 «Не паказваць рэкламу YouTube» — калі YouTube уключае рэкламу перад відэа, бот спыняе відэа да таго, як яго ўбачаць гледачы, вяртае балы і працягвае музыку. Каб рэкламы не было зусім:
 1. Націсніце «Увайсці ў YouTube»
 2. Увайдзіце ў акаўнт Google, дзе ёсць YouTube Premium
-3. На старонцы «Перейти на сайт?» націсніце «Перейти» — вы вернецеся ў док
+3. YouTube спытае, ці хочаце вы выйсці з YouTube, — націсніце «Перайсці на сайт» («Перейти на сайт»), і вы вернецеся ў док
 
 Уваход застаецца ў OBS. Праверка — «Стан» → «Рэклама перад відэа»: з Premium там 0`,"settings.video.price":`Кошт у балах канала`,"settings.video.maxDuration":`Максімальная даўжыня, хвілін`,"settings.video.volume":`Гучнасць`,"settings.video.audio":`Гук відэа для хвалі`,"settings.video.audio.auto":`Оверлэй (бот знойдзе сам)`,"settings.video.audio.found":`Хваля падчас відэа рэагуе на гук крыніцы «{name}»`,"settings.video.audio.noAudio":`У крыніцы «{name}» не ўключана «Управлять звуком через OBS», хваля падчас відэа рухаецца сама`,"settings.video.audio.notFound":`Оверлэй у OBS не знойдзены, хваля падчас відэа рухаецца сама`,"settings.video.skipAds":`Не паказваць рэкламу YouTube`,"settings.video.account":`Акаўнт YouTube`,"settings.video.signIn":`Увайсці ў YouTube`,"settings.video.signIn.hint":`З акаўнтам YouTube Premium відэа граюць без рэкламы`,"settings.video.adsSeen":`Перад відэа была рэклама ({n}): увайдзіце ў акаўнт з YouTube Premium`,"settings.rules.allowExplicit":`Дазволіць explicit`,"settings.twitch":`Twitch`,"settings.twitch.help":`Twitch патрэбны, каб гледачы замаўлялі песні за балы канала, а бот адказваў ім у чаце ад вашага імя
 
