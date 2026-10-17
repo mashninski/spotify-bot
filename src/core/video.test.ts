@@ -32,6 +32,22 @@ describe('відэа: калі пачынаць', () => {
     expect(vd.videoToStart({ ...base, progressMs: 179_000, requests: [song('r', 'ales'), video('v')] })).toBeNull();
   });
 
+  it('рыхтаваць відэа ў оверлэі — за 10 с да канца песні', () => {
+    const base = state({ current: song('s'), isPlaying: true, requests: [video('v')] });
+    expect(vd.videoToPrepare({ ...base, progressMs: 160_000 })).toBeNull();
+    expect(vd.videoToPrepare({ ...base, progressMs: 171_000 })).toBe('v');
+    expect(vd.videoToPrepare({ ...base, progressMs: 171_000, isPlaying: false })).toBeNull();
+    // Відэа пачалося — рыхтаваць больш няма чаго.
+    expect(vd.startVideo({ ...base, videoPrepare: 'v' }, 'v', 'next', 0).videoPrepare).toBeNull();
+  });
+
+  it('відэа «гатовае» — толькі калі оверлэй паведаміў «грае» (паказаў відэа)', () => {
+    const s = vd.startVideo(state({ requests: [video('v')] }), 'v', 'next', 0);
+    expect(s.video?.ready).toBe(false);
+    expect(vd.applyReport(s, { key: 'v', state: 'loading', positionMs: 0 }, 1).state.video?.ready).toBe(false);
+    expect(vd.applyReport(s, { key: 'v', state: 'playing', positionMs: 0 }, 1).state.video?.ready).toBe(true);
+  });
+
   it('Spotify сам перайшоў да наступнай песні плэйліста — відэа адразу', () => {
     const before = state({ current: song('s'), isPlaying: true, requests: [video('v')], context: [song('c1'), song('c2')] });
     const after = state({ ...before, current: song('c1'), context: [song('c2')] });

@@ -129,8 +129,15 @@ const NO_SETTINGS = createStore(defaultSettings());
 /** Відэа, якое павінна граць зараз, па стане мозгу. */
 function videoTarget(player: PlayerState): VideoTarget | null {
   const video = currentVideo(player);
-  if (!video?.track.videoId || !player.video) return null;
-  return { key: video.key, videoId: video.track.videoId, positionMs: player.progressMs, playing: player.isPlaying, seek: player.video.seek };
+  if (video?.track.videoId && player.video) {
+    return { key: video.key, videoId: video.track.videoId, positionMs: player.progressMs, playing: player.isPlaying, seek: player.video.seek };
+  }
+  // Хутка чарга відэа — рыхтуем загадзя (грае схавана і без гуку, гл. video-player.ts).
+  const next = player.requests[0];
+  if (player.videoPrepare && next?.key === player.videoPrepare && next.track.videoId) {
+    return { key: next.key, videoId: next.track.videoId, positionMs: 0, playing: true, seek: 0, prepare: true };
+  }
+  return null;
 }
 
 /**
@@ -155,7 +162,7 @@ function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null;
    * YouTube Premium YouTube лічыць праглядам у двух месцах і спыняе адзін з іх (відэа абрывалася праз некалькі секунд).
    */
   const mirror = !demo && !isOwner;
-  const visible = Boolean(target && target.key !== endedKey && (mirror || target.key === revealedKey));
+  const visible = Boolean(target && !target.prepare && target.key !== endedKey && (mirror || target.key === revealedKey));
 
   useEffect(() => {
     if (!host.current) return;
@@ -190,14 +197,14 @@ function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null;
 
   useEffect(() => {
     control.current?.setTarget(target && target.key !== endedKey && !mirror ? target : null);
-  }, [target?.key, target?.videoId, target?.playing, target?.seek, Math.floor((target?.positionMs ?? 0) / 1000), endedKey, mirror]);
+  }, [target?.prepare, target?.key, target?.videoId, target?.playing, target?.seek, Math.floor((target?.positionMs ?? 0) / 1000), endedKey, mirror]);
 
   return (
     <div class="video-slot">
       <div class={`video-card${visible ? ' shown' : ''}`}>
         <div class="video-frame">
           <div class="video-host" ref={host} />
-          {mirror && target && <img class="video-thumb" src={`https://i.ytimg.com/vi/${target.videoId}/hqdefault.jpg`} alt="" />}
+          {mirror && target && !target.prepare && <img class="video-thumb" src={`https://i.ytimg.com/vi/${target.videoId}/hqdefault.jpg`} alt="" />}
         </div>
       </div>
     </div>
@@ -281,10 +288,65 @@ function TrackMeta({ current }: { current: OverlayTrack }) {
   );
 }
 
+/** Хуткасць прагорткі доўгай назвы, px/с, і паўза на пачатку і ў канцы, мс. */
+const MARQUEE_SPEED = 35;
+const MARQUEE_HOLD_MS = 2000;
+
+/**
+ * Назва, якая не змяшчаецца, павольна прагортваецца да канца, спыняецца і вяртаецца на пачатак (просьба аўтара),
+ * каб яе можна было прачытаць цалкам. Кароткая назва стаіць на месцы.
+ */
+function Marquee({ text, class: className }: { text: string; class: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    const span = inner.current;
+    if (!el || !span) return;
+    let anim: Animation | null = null;
+    const start = () => {
+      anim?.cancel();
+      anim = null;
+      const shift = span.scrollWidth - el.clientWidth;
+      el.classList.toggle('scrolling', shift > 2);
+      if (shift <= 2 || typeof span.animate !== 'function') return;
+      const move = (shift / MARQUEE_SPEED) * 1000;
+      const total = 2 * MARQUEE_HOLD_MS + 2 * move;
+      const end = `translateX(${-shift}px)`;
+      anim = span.animate(
+        [
+          { transform: 'translateX(0)', offset: 0 },
+          { transform: 'translateX(0)', offset: MARQUEE_HOLD_MS / total, easing: 'ease-in-out' },
+          { transform: end, offset: (MARQUEE_HOLD_MS + move) / total },
+          { transform: end, offset: (2 * MARQUEE_HOLD_MS + move) / total, easing: 'ease-in-out' },
+          { transform: 'translateX(0)', offset: 1 },
+        ],
+        { duration: total, iterations: Infinity },
+      );
+    };
+    start();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(start);
+    observer?.observe(el);
+    return () => {
+      anim?.cancel();
+      observer?.disconnect();
+    };
+  }, [text]);
+
+  return (
+    <div class={`${className} marquee`} ref={box}>
+      <span class="marquee-text" ref={inner}>
+        {text}
+      </span>
+    </div>
+  );
+}
+
 function MetaLines({ track, class: className }: { track: OverlayTrack; class: string }) {
   return (
     <div class={className}>
-      <div class="title">{track.title}</div>
+      <Marquee text={track.title} class="title" />
       <div class="artist">
         <span class="artist-name">{track.artist}</span>
         {track.requestedBy && (

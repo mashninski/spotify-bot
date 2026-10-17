@@ -125,6 +125,8 @@ describe('відэа YouTube: замова і чарга', () => {
 
     // Песня ў Spotify амаль скончылася: бот ставіць паўзу і пачынае відэа, Spotify нічога ў чаргу не атрымлівае.
     spotify.state.progressMs = 180_000 - 2500;
+    // Спачатку оверлэй атрымлівае загад рыхтаваць відэа (за 10 с да канца песні), потым відэа становіцца бягучым.
+    await vi.waitFor(() => expect(dock.player.get().videoPrepare ?? dock.player.get().video?.key).toBeTruthy(), SLOW);
     await vi.waitFor(() => expect(dock.player.get().current?.track.source).toBe('youtube'), SLOW);
     await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
     expect(spotify.count('POST /me/player/queue')).toBe(0);
@@ -157,6 +159,9 @@ describe('відэа YouTube: замова і чарга', () => {
 
     dock.playNow(video.key);
     await vi.waitFor(() => expect(dock.player.get().current?.key).toBe(video.key), WAIT);
+    // Пакуль оверлэй рыхтуе відэа, музыка грае; паўза — калі відэа з’явілася.
+    expect(spotify.state.playing).toBe(true);
+    report(dock, 'playing', 0);
     await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
     report(dock, 'playing', 40_000);
     await vi.waitFor(() => expect(dock.player.get().progressMs).toBeGreaterThanOrEqual(40_000), WAIT);
@@ -266,10 +271,11 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
     const r = twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
     await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
     dock.next();
-    await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
+    await vi.waitFor(() => expect(dock.player.get().current?.track.source).toBe('youtube'), WAIT);
     await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
     await vi.waitFor(() => expect(twitch.state.chat.at(-1)).toBe('@Kasia відэа «Rick Astley - Never Gonna Give You Up» не атрымалася паказаць, балы вернуты'), WAIT);
-    await vi.waitFor(() => expect(spotify.state.playing).toBe(true), WAIT);
+    // Відэа так і не з’явілася — музыка не спынялася і не пераключалася.
+    expect(spotify.state).toMatchObject({ playing: true, current: { id: 'a' } });
     expect(dock.notice.get()?.kind).toBe('error');
   });
 
@@ -297,7 +303,7 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
     const r = twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
     await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
     dock.next();
-    await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
+    await vi.waitFor(() => expect(dock.player.get().current?.track.source).toBe('youtube'), WAIT);
     report(dock, 'ad', 1200);
     await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
     await vi.waitFor(
@@ -316,12 +322,14 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
     const r = twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
     await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
     dock.next();
-    await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
+    await vi.waitFor(() => expect(dock.player.get().current?.track.source).toBe('youtube'), WAIT);
     report(dock, 'ad', 3000);
     await new Promise((res) => setTimeout(res, 800));
     expect(dock.player.get().current?.track.source).toBe('youtube');
     expect(dock.youtube.get().ads).toBe(1);
     report(dock, 'playing', 1000);
+    // Відэа з’явілася — Spotify на паўзу.
+    await vi.waitFor(() => expect(spotify.state.playing).toBe(false), WAIT);
     await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('FULFILLED'), WAIT);
   });
 

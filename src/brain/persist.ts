@@ -72,6 +72,8 @@ function parseVideo(raw: unknown, current: QueueItem | null): VideoState | null 
     seek: num(raw.seek),
     spotifyPaused: raw.spotifyPaused === true,
     started: raw.started === true,
+    ready: raw.ready === true,
+    pausePending: false,
   };
 }
 

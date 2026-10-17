@@ -7,6 +7,10 @@ import { isVideo, type PlayerState, type QueueItem, type SpotifyResume } from '.
 
 /** За колькі да канца песні ў Spotify ставіць паўзу і пачынаць відэа (апошнія долі секунды песні — звычайна цішыня). */
 export const VIDEO_SWITCH_BEFORE_MS = 1200;
+/** За колькі да канца песні оверлэй пачынае рыхтаваць наступнае відэа (схавана, без гуку). */
+export const VIDEO_PREPARE_BEFORE_MS = 10_000;
+/** Найдаўжэй Spotify грае, пакуль рыхтуецца відэа, уключанае ▶ або «Наступная». */
+export const PAUSE_PENDING_MAX_MS = 7000;
 /** Плэер оверлэя так доўга маўчыць — відэа паказаць не атрымалася (оверлэя няма, плэер упаў). */
 export const PLAYER_SILENCE_MS = 12_000;
 /**
@@ -31,6 +35,14 @@ export interface VideoReport {
 /** Бягучае відэа, калі яно ёсць. */
 export function currentVideo(state: PlayerState): QueueItem | null {
   return state.current && isVideo(state.current.track) && state.video?.key === state.current.key ? state.current : null;
+}
+
+/** Відэа, якое пара рыхтаваць у оверлэі: першае ў чарзе — відэа, а песня ў Spotify скончыцца праз ≤ 10 с. */
+export function videoToPrepare(state: PlayerState): string | null {
+  const first = state.requests[0];
+  if (!first || !isVideo(first.track) || currentVideo(state)) return null;
+  if (!state.current?.track.uri || !state.isPlaying) return null;
+  return state.current.track.durationMs - state.progressMs <= VIDEO_PREPARE_BEFORE_MS ? first.key : null;
 }
 
 /** Відэа, якое пара пачаць: першае ў чарзе — відэа, а песня ў Spotify вось-вось скончыцца. */
@@ -75,7 +87,8 @@ export function startVideo(state: PlayerState, key: string, resume: SpotifyResum
     requests: state.requests.filter((r) => r.key !== key),
     history,
     context,
-    video: { key, resume, startedAt: now, reportAt: 0, seek: 0, spotifyPaused: false, started: false },
+    videoPrepare: null,
+    video: { key, resume, startedAt: now, reportAt: 0, seek: 0, spotifyPaused: false, started: false, ready: false, pausePending: false },
   };
 }
 
@@ -125,6 +138,8 @@ export function applyReport(
   // Час рэкламы — не час відэа: пазіцыю не чапаем.
   if (report.state === 'ad') return { state: { ...state, video: { ...state.video, reportAt: now } }, ended: false, failed: false, ad: true };
   const started = state.video.started || (report.state === 'playing' && report.positionMs > 0);
+  // Оверлэй паведамляе «грае» толькі пасля таго, як паказаў відэа.
+  const ready = state.video.ready || report.state === 'playing';
   const progressMs =
     report.state === 'ended'
       ? video.track.durationMs
@@ -132,7 +147,7 @@ export function applyReport(
         ? Math.min(report.positionMs, video.track.durationMs)
         : state.progressMs;
   return {
-    state: { ...state, progressMs, video: { ...state.video, reportAt: now, started } },
+    state: { ...state, progressMs, video: { ...state.video, reportAt: now, started, ready } },
     ended: report.state === 'ended',
     failed: report.state === 'error',
     ad: false,

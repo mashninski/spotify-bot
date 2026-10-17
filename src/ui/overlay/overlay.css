@@ -348,3 +348,15 @@ body {
   font: 11px/1.4 Consolas, monospace;
   border-radius: 6px;
 }
+
+/* Доўгая назва прагортваецца (Marquee у Overlay.tsx): без шматкроп’я, тэкст — адным радком. */
+.marquee {
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.marquee-text {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}

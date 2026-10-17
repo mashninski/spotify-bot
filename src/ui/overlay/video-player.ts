@@ -14,6 +14,8 @@ export interface VideoTarget {
   playing: boolean;
   /** Лічыльнік перамоткі мозгу: змяніўся — перамотваем на `positionMs`. */
   seek: number;
+  /** Відэа яшчэ не бягучае — рыхтуем загадзя: грае схавана і без гуку, мозгу не паведамляем. */
+  prepare?: boolean;
 }
 
 export interface VideoPlayerOptions {
@@ -41,11 +43,12 @@ const MIRROR_SEEK_EVERY_MS = 30_000;
 /** Калі відэа так доўга не пачынаецца (браўзер не дае ўключыць з гукам) — уключаем без гуку, каб хоць было відаць. */
 const AUTOPLAY_FALLBACK_MS = 4000;
 /**
- * Плашка з’яўляецца, як толькі пайшло само відэа (не рэклама): відэа відаць з першага кадра (заўвага аўтара).
- * Інтэрфейс YouTube (назва, «Поделиться», лагатып, «Другие видео») застаецца за краем плашкі — плэер вышэйшы
- * за плашку, відэа 16:9 у ім па цэнтры, а палосы зверху і знізу абрэзаны (overlay.css, `--video-crop`).
+ * Першыя 2–3 с прайгравання YouTube паказвае над відэа свой інтэрфейс (назва, паўза, «Поделиться», лагатып) — і пры
+ * любым спосабе запуску. Пасля перамоткі ён яго зноў не паказвае (праверана 2026-10-17). Таму відэа спачатку грае
+ * схавана і без гуку столькі часу, потым — перамотка ў патрэбнае месца (звычайна ў пачатак), гук і плашка:
+ * гледачы бачаць відэа з першага кадра без кнопак. Пры звычайнай змене песні гэта робіцца загадзя (`prepare`).
  */
-const REVEAL_PLAYED_MS = 0;
+const WARM_MS = 3500;
 /**
  * Калі відэа за столькі пасля загрузкі так і не пачало ісці (рэклама перад відэа, памылка YouTube), плашка
  * ўсё роўна з’яўляецца: рэкламу і памылкі мы не хаваем (правілы YouTube забараняюць схаваны плэер).
@@ -90,6 +93,8 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
   let adSeen = false;
   /** Апошні час плэера, пакуль ён «не запушчаны»: калі ён ідзе — гэта рэклама. */
   let unstartedTime: number | null = null;
+  /** Пра рэкламу перад гэтым відэа мозгу ўжо паведамлена. */
+  let adReportedKey = '';
 
   const timer = setInterval(() => tick(), REPORT_MS);
   const watchTimer = setInterval(() => watch(), REVEAL_CHECK_MS);
@@ -119,19 +124,23 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       return;
     }
     if (state === PlayerState.PLAYING) {
-      if (mainStart === null) {
-        mainStart = time;
-        applySound();
-      }
+      if (mainStart === null) mainStart = time;
     } else if (state === PlayerState.UNSTARTED) {
       if (unstartedTime !== null && time > unstartedTime + 0.15 && !adSeen) onAd(t.key);
       unstartedTime = time;
     }
-    if (revealedKey === t.key) return;
-    // Плашка — калі само відэа ідзе 4 с: YouTube ужо схаваў назву, кнопкі і «Другие видео».
-    const played = mainStart === null ? 0 : (time - mainStart) * 1000;
+    if (revealedKey === t.key || t.prepare) return;
+    // Відэа ўжо прагрэлася (YouTube схаваў інтэрфейс) — у патрэбнае месца, гук, плашка.
+    const warm = state === PlayerState.PLAYING && mainStart !== null && (time - mainStart) * 1000 >= WARM_MS;
     const nothing = mainStart === null && !adSeen && Date.now() - loadedAt >= REVEAL_NOT_STARTED_MS;
-    if ((state === PlayerState.PLAYING && played >= REVEAL_PLAYED_MS) || nothing) doReveal(t.key);
+    if (warm) {
+      player.seekTo(t.positionMs / 1000, true);
+      lastSeek = t.seek;
+      revealedKey = t.key;
+      applySound();
+      options.onReveal(t.key);
+      report('playing');
+    } else if (nothing) doReveal(t.key);
   }
 
   function doReveal(key: string): void {
@@ -145,7 +154,11 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
    */
   function onAd(key: string): void {
     adSeen = true;
-    report('ad');
+    // Рэклама перад відэа, якое толькі рыхтуецца, — мозгу скажам, калі прыйдзе яго чарга (setTarget).
+    if (!target?.prepare) {
+      report('ad');
+      adReportedKey = key;
+    }
     if (skipAds) {
       endedKey = key;
       try {
@@ -156,13 +169,16 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       options.onLocalEnd(key);
       return;
     }
+    if (target?.prepare) return;
     applySound();
     doReveal(key);
   }
 
   function report(state: VideoPlayerState, code?: number): void {
-    if (!owner || !target) return;
-    const positionMs = player && ready ? Math.max(0, Math.round((player.getCurrentTime() || 0) * 1000)) : target.positionMs;
+    if (!owner || !target || target.prepare) return;
+    // Пакуль відэа рыхтуецца (схавана), яго час — не час для гледачоў: паведамляем месца, адкуль яно пачнецца.
+    const shown = revealedKey === target.key;
+    const positionMs = player && ready && shown ? Math.max(0, Math.round((player.getCurrentTime() || 0) * 1000)) : target.positionMs;
     options.onReport({ key: target.key, state, positionMs, ...(code !== undefined ? { code } : {}) });
   }
 
@@ -177,8 +193,8 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
 
   function applySound(): void {
     if (!player || !ready) return;
-    // Гук — толькі калі пайшло само відэа (або рэклама, калі яе паказваем): рэклама не павінна мільгнуць гукам у эфіры.
-    const allowed = mainStart !== null || (adSeen && !skipAds);
+    // Гук — толькі калі відэа паказана (або рэклама, калі яе паказваем): пакуль відэа рыхтуецца, яго не чуваць.
+    const allowed = (revealedKey !== '' && revealedKey === loadedKey) || (adSeen && !skipAds && !target?.prepare);
     if (!owner || fallbackMuted || !allowed) {
       player.mute();
       return;
@@ -212,13 +228,13 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
             sync();
           },
           onStateChange: (e) => {
-            if (e.data === PlayerState.ENDED && target && endedKey !== target.key) {
+            if (e.data === PlayerState.ENDED && target && endedKey !== target.key && revealedKey === target.key) {
               endedKey = target.key;
               report('ended');
               options.onLocalEnd(target.key);
             } else if (e.data === PlayerState.PLAYING || e.data === PlayerState.PAUSED) {
               if (e.data === PlayerState.PLAYING) hideCaptions();
-              report(stateName(e.data));
+              if (target && revealedKey === target.key) report(stateName(e.data));
             }
           },
           onError: (e) => {
@@ -302,13 +318,18 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
     }
     if (endedKey === target.key) return;
     sync();
-    report(stateName(state));
+    report(revealedKey === target.key ? stateName(state) : 'loading');
   }
 
   return {
     /** Што павінна граць (`null` — нічога). */
     setTarget(next: VideoTarget | null): void {
       target = next;
+      // Падрыхтаванае відэа стала бягучым, а перад ім была рэклама — цяпер можна сказаць мозгу.
+      if (next && !next.prepare && next.key === loadedKey && adSeen && adReportedKey !== next.key) {
+        adReportedKey = next.key;
+        report('ad');
+      }
       sync();
     },
     /** Гэты оверлэй грае з гукам і паведамляе мозгу. */
