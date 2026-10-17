@@ -36,13 +36,18 @@ const IDLE_REPORT_MS = 5000;
 const MIRROR_DRIFT_MS = 3000;
 /** Калі відэа так доўга не пачынаецца (браўзер не дае ўключыць з гукам) — уключаем без гуку, каб хоць было відаць. */
 const AUTOPLAY_FALLBACK_MS = 4000;
-/** Колькі відэа грае, пакуль YouTube не схавае свой інтэрфейс (без мышы ён знікае праз 2–3 с). */
-const REVEAL_AFTER_PLAYING_MS = 3500;
 /**
- * Найпазней плашка з’яўляецца праз столькі пасля загрузкі, што б ні рабіў плэер: рэкламу і памылкі YouTube
- * мы не хаваем (правілы YouTube забараняюць схаваны плэер).
+ * Колькі сапраўды прайгралася відэа (па часе самога відэа), калі YouTube ужо схаваў свой інтэрфейс:
+ * без мышы назва, кнопкі і «Другие видео» знікаюць праз 2–3 с прайгравання. Па часе відэа, а не па падзеях
+ * плэера: загрузка і буферызацыя ў пачатку гэты час не з’ядаюць.
  */
-const REVEAL_MAX_MS = 8000;
+const REVEAL_PLAYED_MS = 4000;
+/**
+ * Калі відэа за столькі пасля загрузкі так і не пачало ісці (рэклама перад відэа, памылка YouTube), плашка
+ * ўсё роўна з’яўляецца: рэкламу і памылкі мы не хаваем (правілы YouTube забараняюць схаваны плэер).
+ */
+const REVEAL_NOT_STARTED_MS = 8000;
+const REVEAL_CHECK_MS = 250;
 
 function stateName(code: number): VideoPlayerState {
   switch (code) {
@@ -74,27 +79,31 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
   let fallbackMuted = false;
   let destroyed = false;
   let revealedKey = '';
-  let reveal: { key: string; at: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  /** З якога месца (с) відэа загружана: ад яго лічым, колькі прайгралася. */
+  let loadedFrom = 0;
 
   const timer = setInterval(() => tick(), REPORT_MS);
+  const revealTimer = setInterval(() => checkReveal(), REVEAL_CHECK_MS);
   let lastIdleAt = 0;
 
-  /** Паказаць плашку відэа `key` праз `delay` (калі раней не паказана і не запланавана раней). */
-  function armReveal(key: string, delay: number): void {
-    if (!key || revealedKey === key) return;
-    const at = Date.now() + delay;
-    if (reveal && reveal.key === key && reveal.at <= at) return;
-    if (reveal) clearTimeout(reveal.timer);
-    reveal = {
-      key,
-      at,
-      timer: setTimeout(() => {
-        reveal = null;
-        if (destroyed || target?.key !== key) return;
-        revealedKey = key;
-        options.onReveal(key);
-      }, delay),
-    };
+  /** Ці пара паказаць плашку: відэа прайгралася 4 с або так і не пачалося за 8 с. */
+  function checkReveal(): void {
+    const t = target;
+    if (!t || revealedKey === t.key || loadedKey !== t.key || !loadedAt) return;
+    let played = 0;
+    if (player && ready) {
+      try {
+        played = ((player.getCurrentTime() || 0) - loadedFrom) * 1000;
+      } catch {
+        played = 0;
+      }
+    }
+    const waited = Date.now() - loadedAt;
+    // Відэа пайшло — чакаем, пакуль YouTube схавае свой інтэрфейс; не пайшло зусім — не хаваем тое, што там ёсць.
+    if (played >= REVEAL_PLAYED_MS || (played < 250 && waited >= REVEAL_NOT_STARTED_MS)) {
+      revealedKey = t.key;
+      options.onReveal(t.key);
+    }
   }
 
   function report(state: VideoPlayerState, code?: number): void {
@@ -132,8 +141,8 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       options.host.replaceChildren(el);
       loadedKey = t.key;
       loadedAt = Date.now();
+      loadedFrom = Math.floor(t.positionMs / 1000);
       lastSeek = t.seek;
-      armReveal(t.key, REVEAL_MAX_MS);
       player = new YT.Player(el, {
         width: '100%',
         height: '100%',
@@ -152,10 +161,7 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
               report('ended');
               options.onLocalEnd(target.key);
             } else if (e.data === PlayerState.PLAYING || e.data === PlayerState.PAUSED) {
-              if (e.data === PlayerState.PLAYING && target) {
-                hideCaptions();
-                armReveal(target.key, REVEAL_AFTER_PLAYING_MS);
-              }
+              if (e.data === PlayerState.PLAYING) hideCaptions();
               report(stateName(e.data));
             }
           },
@@ -192,8 +198,8 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
     if (loadedKey !== t.key) {
       loadedKey = t.key;
       loadedAt = Date.now();
+      loadedFrom = Math.floor(t.positionMs / 1000);
       lastSeek = t.seek;
-      armReveal(t.key, REVEAL_MAX_MS);
       endedKey = '';
       fallbackMuted = false;
       applySound();
@@ -258,6 +264,7 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
     destroy(): void {
       destroyed = true;
       clearInterval(timer);
+      clearInterval(revealTimer);
       try {
         player?.destroy();
       } catch {

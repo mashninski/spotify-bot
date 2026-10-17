@@ -193,7 +193,9 @@ function DebugPanel({ info, hasState, node }: { info: DebugInfo; hasState: boole
   const env = obsBrowserInfo();
   return (
     <div class="debug">
-      <div>{env.inObs ? `OBS ${env.version}` : t('diag.obs.notObs')}</div>
+      <div>
+        {env.inObs ? `OBS ${env.version}` : t('diag.obs.notObs')} · {__APP_VERSION__}
+      </div>
       {node && <BrainInfo node={node} />}
       {!hasState && <div>{t('overlay.debug.waiting')}</div>}
       {info.channel && <div>{t('overlay.debug.channel', { channel: info.channel })}</div>}

@@ -61,6 +61,7 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
           {t(`diag.brain.where.${where}` as MessageKey)}
         </Row>
         {leader && <Row label={t('diag.brain.since')}>{clock(leader.since)}</Row>}
+        <Row label={t('diag.brain.version')}>{__APP_VERSION__}</Row>
         {!controller.locksSupported && (
           <Row label={t('diag.brain.choice')} tone="bad">
             {t('diag.brain.dockOnly')}

@@ -210,6 +210,7 @@ export const be = {
   'diag.brain.where.here.dock': 'гэты док',
   'diag.brain.where.here.overlay': 'гэты оверлэй',
   'diag.brain.since': 'Старт',
+  'diag.brain.version': 'Версія',
   'diag.brain.choice': 'Выбар старонкі',
   'diag.brain.dockOnly': 'толькі док',
   'diag.brain.conflicts': 'Другі бот',
