@@ -56,7 +56,7 @@ function createFakeYouTube() {
 let counter = 0;
 let nodes: BrainNode[] = [];
 
-function setup(opts: { silenceMs?: number } = {}) {
+function setup(opts: { silenceMs?: number; startMs?: number } = {}) {
   const name = `test-video-${++counter}-${Date.now()}`;
   const storage = memoryStorage();
   const spotify = createFakeSpotify();
@@ -77,6 +77,7 @@ function setup(opts: { silenceMs?: number } = {}) {
       youtubeFetch: youtube.fetch,
       videoProbe: youtube.probe,
       videoSilenceMs: opts.silenceMs,
+      videoStartMs: opts.startMs,
     });
     nodes.push(node);
     node.start();
@@ -270,6 +271,23 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
     await vi.waitFor(() => expect(twitch.state.chat.at(-1)).toBe('@Kasia відэа «Rick Astley - Never Gonna Give You Up» не атрымалася паказаць, балы вернуты'), WAIT);
     await vi.waitFor(() => expect(spotify.state.playing).toBe(true), WAIT);
     expect(dock.notice.get()?.kind).toBe('error');
+  });
+
+  it('плэер жывы, але відэа не пачынаецца — балы вернуты, музыка працягваецца', async () => {
+    const { make, twitch, spotify } = setup({ startMs: 1500 });
+    const dock = make('dock');
+    await ready(twitch, dock);
+    const r = twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
+    dock.next();
+    await vi.waitFor(() => expect(dock.player.get().current?.track.source).toBe('youtube'), WAIT);
+    const loading = setInterval(() => report(dock, 'loading'), 300);
+    try {
+      await vi.waitFor(() => expect(twitch.statusOf(r.id)).toBe('CANCELED'), WAIT);
+      await vi.waitFor(() => expect(spotify.state.playing).toBe(true), WAIT);
+    } finally {
+      clearInterval(loading);
+    }
   });
 
   it('памылка плэера пасля пачатку — відэа заканчваецца, але балы не вяртаюцца', async () => {

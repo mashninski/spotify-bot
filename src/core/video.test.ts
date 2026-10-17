@@ -104,6 +104,14 @@ describe('відэа: паведамленні плэера', () => {
     expect(vd.videoStalled(reported, 15_000)).toBe(false);
   });
 
+  it('відэа не пачынаецца 60 с (плэер жывы) — паказаць не атрымалася; на паўзе не лічым', () => {
+    expect(vd.videoNotStarting(s, vd.VIDEO_START_TIMEOUT_MS - 1)).toBe(false);
+    expect(vd.videoNotStarting(s, vd.VIDEO_START_TIMEOUT_MS)).toBe(true);
+    expect(vd.videoNotStarting({ ...s, isPlaying: false }, vd.VIDEO_START_TIMEOUT_MS)).toBe(false);
+    const started = vd.applyReport(s, { key: 'v', state: 'playing', positionMs: 500 }, 1000).state;
+    expect(vd.videoNotStarting(started, vd.VIDEO_START_TIMEOUT_MS * 2)).toBe(false);
+  });
+
   it('«Папярэдняя» — з пачатку: лічыльнік перамоткі', () => {
     const moved = vd.restartVideo({ ...s, progressMs: 50_000 });
     expect(moved.progressMs).toBe(0);

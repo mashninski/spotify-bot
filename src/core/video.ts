@@ -9,6 +9,11 @@ import { isVideo, type PlayerState, type QueueItem, type SpotifyResume } from '.
 export const VIDEO_SWITCH_BEFORE_MS = 1200;
 /** Плэер оверлэя так доўга маўчыць — відэа паказаць не атрымалася (оверлэя няма, плэер упаў). */
 export const PLAYER_SILENCE_MS = 12_000;
+/**
+ * Плэер жывы, але відэа так доўга не пачынаецца (YouTube не аддае відэа, браўзер не дае ўключыць) — паказаць не атрымалася.
+ * З запасам на рэкламу перад відэа, падчас якой час відэа не ідзе.
+ */
+export const VIDEO_START_TIMEOUT_MS = 60_000;
 
 /** Што паведамляе плэер оверлэя. */
 export type VideoPlayerState = 'loading' | 'playing' | 'paused' | 'buffering' | 'ended' | 'error' | 'idle';
@@ -130,6 +135,12 @@ export function applyReport(state: PlayerState, report: VideoReport, now: number
 export function videoStalled(state: PlayerState, now: number, silenceMs = PLAYER_SILENCE_MS): boolean {
   if (!currentVideo(state) || !state.video) return false;
   return now - Math.max(state.video.startedAt, state.video.reportAt) >= silenceMs;
+}
+
+/** Відэа даўно бягучае, а плэер так і не пачаў яго паказваць. */
+export function videoNotStarting(state: PlayerState, now: number, timeoutMs = VIDEO_START_TIMEOUT_MS): boolean {
+  if (!currentVideo(state) || !state.video || state.video.started || !state.isPlaying) return false;
+  return now - state.video.startedAt >= timeoutMs;
 }
 
 /** «Папярэдняя» падчас відэа: відэа з пачатку. */

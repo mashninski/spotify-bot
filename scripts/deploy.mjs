@@ -1,6 +1,8 @@
 // Публікацыя зборкі на хостынг (Этап 5, ADR-019): змесціва `dist/` → галіна `gh-pages` асобнага публічнага рэпазіторыя.
 // Зыходны код застаецца ў прыватным рэпазіторыі, публічная толькі зборка (у ёй няма сакрэтаў, Client ID — не сакрэт).
 // Запуск: `npm run deploy` (спачатку зборка). Адрас рэпазіторыя — `deploy.repo` у package.json або зменная DEPLOY_REPO.
+// `npm run deploy:next` — тэставая версія ў папку `next/` (адрас …/next/): асноўная версія не мяняецца, пакуль аўтар
+// правярае новую ў OBS (ADR-020). Асноўная публікацыя замяняе ўвесь сайт, у тым ліку `next/`.
 // Гісторыя галіны захоўваецца: кожная публікацыя — асобны commit, без `push --force`.
 
 import { execFileSync } from 'node:child_process';
@@ -13,6 +15,8 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const repo = process.env.DEPLOY_REPO || pkg.deploy?.repo;
 const branch = 'gh-pages';
 const dist = join(root, 'dist');
+/** Падпапка для тэставай версіі (`next`) або `''` — увесь сайт. */
+const folder = (process.argv[2] ?? '').replace(/[^a-z0-9-]/gi, '');
 
 if (!repo) throw new Error('Не зададзены адрас рэпазіторыя: deploy.repo у package.json або DEPLOY_REPO');
 if (!existsSync(join(dist, 'dock.html'))) throw new Error('Няма зборкі: спачатку npm run build');
@@ -29,17 +33,19 @@ try {
     git(['init', '--quiet', '-b', branch], work);
     git(['remote', 'add', 'origin', repo], work);
   }
-  for (const name of readdirSync(work)) if (name !== '.git') rmSync(join(work, name), { recursive: true, force: true });
-  cpSync(dist, work, { recursive: true });
+  const target = folder ? join(work, folder) : work;
+  if (folder) rmSync(target, { recursive: true, force: true });
+  else for (const name of readdirSync(work)) if (name !== '.git') rmSync(join(work, name), { recursive: true, force: true });
+  cpSync(dist, target, { recursive: true });
   // GitHub Pages не павінен апрацоўваць файлы праз Jekyll.
   writeFileSync(join(work, '.nojekyll'), '');
   git(['add', '--all'], work);
   if (git(['status', '--porcelain'], work) === '') {
     console.log('Зменаў няма — публікаваць нічога');
   } else {
-    git(['commit', '--quiet', '-m', `зборка з ${source}`], work);
+    git(['commit', '--quiet', '-m', folder ? `тэставая зборка (${folder}/) з ${source}` : `зборка з ${source}`], work);
     git(['push', '--quiet', 'origin', branch], work);
-    console.log(`Апублікавана: ${repo} (${branch}), зборка з ${source}`);
+    console.log(`Апублікавана: ${repo} (${branch}${folder ? `, ${folder}/` : ''}), зборка з ${source}`);
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

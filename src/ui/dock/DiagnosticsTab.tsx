@@ -19,6 +19,27 @@ function Row({ label, tone = '', children }: { label: string; tone?: Tone; child
   );
 }
 
+/** Плэер відэа ў оверлэі паведамляе пра сябе раз у 5 с (ADR-020). */
+const PLAYER_ALIVE_MS = 12_000;
+
+/** Відэа YouTube: ці ёсць плэер у оверлэі і па якой крыніцы рухаецца хваля падчас відэа. */
+function YouTubeBlock({ controller }: { controller: DockController }) {
+  const youtube = useStore(controller.youtube);
+  const chosen = useStore(controller.settings).video.audioSource;
+  const alive = youtube.playerSeenAt > 0 && Date.now() - youtube.playerSeenAt < PLAYER_ALIVE_MS;
+  const audio = chosen || (youtube.overlayAudio ? youtube.overlaySource : '');
+  return (
+    <Section title={t('diag.youtube')} help={t('diag.youtube.help')}>
+      <Row label={t('diag.youtube.player')} tone={alive ? 'good' : 'bad'}>
+        {alive ? t('diag.youtube.player.ok') : t('diag.youtube.player.none')}
+      </Row>
+      <Row label={t('diag.youtube.audio')} tone={audio ? '' : 'muted'}>
+        {audio || t('diag.youtube.audio.simulated')}
+      </Row>
+    </Section>
+  );
+}
+
 export function DiagnosticsTab({ controller }: { controller: DockController }) {
   useNow(1000);
   const channel = useStore(controller.channel);
@@ -74,6 +95,8 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
           </Row>
         </Section>
       )}
+
+      {spotify.status !== 'off' && <YouTubeBlock controller={controller} />}
 
       <Section title={t('diag.obs')} help={t('diag.obs.help')}>
         <Row label={t('diag.obs.page')}>{env.inObs ? env.version : t('diag.obs.notObs')}</Row>

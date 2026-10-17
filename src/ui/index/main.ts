@@ -8,6 +8,7 @@ const links: [string, string][] = [
   ['overlay.html', t('index.overlay')],
   ['overlay.html?debug=1', t('index.overlayDebug')],
   ['overlay.html?demo=1', t('index.overlayDemo')],
+  ['overlay.html?demo=video', t('index.overlayDemoVideo')],
 ];
 
 const root = document.getElementById('app')!;

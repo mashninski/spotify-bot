@@ -26,6 +26,8 @@ export interface YTPlayer {
   getDuration(): number;
   getVideoData(): { video_id?: string; title?: string; author?: string; isPlayable?: boolean; isLive?: boolean };
   destroy(): void;
+  /** Не ў дакументацыі API, але працуе: `unloadModule('captions')` выключае субтытры, уключаныя аўтарам відэа. */
+  unloadModule?(name: string): void;
 }
 
 export interface YTPlayerOptions {

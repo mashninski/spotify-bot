@@ -3,6 +3,8 @@
 // Калі лідар знікае (старонка зачынена або перазагружана), браўзер сам аддае замок наступнай старонцы ў чарзе.
 
 export const LEADER_LOCK = 'spotify-bot:leader';
+/** Уладальнік плэера відэа сярод оверлэяў (ADR-020): толькі ён грае відэа з гукам. */
+export const VIDEO_LOCK = 'spotify-bot:video';
 
 /** Частка Web Locks API, якая нам патрэбна (дазваляе падставіць падробку ў тэстах). */
 export interface LockManagerLike {

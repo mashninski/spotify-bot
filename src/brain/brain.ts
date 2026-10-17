@@ -93,6 +93,8 @@ export interface BrainOptions {
   videoProbe?: VideoProbe;
   /** Колькі плэер оверлэя можа маўчаць, пакуль відэа не лічыцца страчаным (тэсты — менш). */
   videoSilenceMs?: number;
+  /** Колькі чакаць, пакуль плэер пачне паказваць відэа (тэсты — менш). */
+  videoStartMs?: number;
 }
 
 export function createBrain(options: BrainOptions) {
@@ -359,15 +361,14 @@ export function createBrain(options: BrainOptions) {
 
   /**
    * Відэа становіцца бягучым: Spotify — на паўзу (калі грае). Плэер у оверлэі ўбачыць новае відэа ў стане
-   * і пачне яго. `resume` — як працягнуць Spotify пасля відэа; `chained` — папярэдняе відэа толькі што скончылася
-   * (Spotify ужо на паўзе, `resume` бярэцца ад яго).
+   * і пачне яго. `resume` — як працягнуць Spotify пасля відэа.
    */
-  function startVideoNow(key: string, resume: SpotifyResume, chained = false): void {
+  function startVideoNow(key: string, resume: SpotifyResume): void {
     const before = player.get();
     const wasVideo = vd.currentVideo(before);
     const spotifyPlaying = spotifyMode && !wasVideo && before.isPlaying && Boolean(before.current?.track.uri);
     // Ланцужок відэа захоўвае, як працягнуць Spotify пасля апошняга; без музыкі Spotify не чапаем.
-    const mode: SpotifyResume = !spotifyMode ? 'none' : chained ? resume : wasVideo ? (before.video?.resume ?? 'none') : spotifyPlaying ? resume : 'none';
+    const mode: SpotifyResume = !spotifyMode ? 'none' : wasVideo ? (before.video?.resume ?? 'none') : spotifyPlaying ? resume : 'none';
     let state = before;
     if (wasVideo) state = vd.endVideo(state)?.state ?? state;
     state = vd.startVideo(state, key, mode, Date.now());
@@ -401,9 +402,9 @@ export function createBrain(options: BrainOptions) {
     }
     const ended = vd.endVideo(before);
     if (!ended) return;
-    player.set(ended.state);
     if (reason === 'streamer') {
       // Spotify ужо грае — песню скажа гэтае ж апытанне.
+      player.set(ended.state);
       persist();
       return;
     }
@@ -414,35 +415,39 @@ export function createBrain(options: BrainOptions) {
         ? { kind: 'video', key: chosen.key, resume: before.video.resume }
         : { kind: 'request', key: chosen.key, resume: before.video.resume === 'none' ? 'next' : before.video.resume };
     }
-    afterVideo(next);
+    afterVideo(ended.state, next);
     persist();
   }
 
-  /** Што грае пасля відэа: наступнае відэа, замова песні або музыка стрымера. */
-  function afterVideo(next: vd.AfterVideo): void {
-    if (next.kind === 'video') return startVideoNow(next.key, next.resume, true);
+  /**
+   * Што грае пасля відэа: наступнае відэа, замова песні або музыка стрымера. Новы стан ставіцца адным крокам:
+   * оверлэй не павінен убачыць паміж відэа і наступным «нічога не грае» (палоска мігнула б).
+   */
+  function afterVideo(base: PlayerState, next: vd.AfterVideo): void {
+    if (next.kind === 'video') {
+      const state = vd.startVideo(base, next.key, spotifyMode ? next.resume : 'none', Date.now());
+      return player.set(state);
+    }
     if (!spotifyMode) {
       // Без Spotify (тэсты) — як раней: наступны запіс з чаргі.
-      player.set((s) => {
-        const key = next.kind === 'request' ? next.key : null;
-        const moved = key ? q.playNow(s, key) : q.skipNext(s);
-        return moved.current ? { ...moved, isPlaying: true } : moved;
-      });
-      return;
+      const moved = next.kind === 'request' ? q.playNow(base, next.key) : q.skipNext(base);
+      return player.set(moved.current ? { ...moved, isPlaying: true } : moved);
     }
     if (next.kind === 'request') {
-      const before = player.get();
-      const item = before.requests.find((r) => r.key === next.key);
-      if (!item?.track.uri) return;
+      const item = base.requests.find((r) => r.key === next.key);
+      if (!item?.track.uri) return player.set(base);
       const enqueue = item.sentAt === undefined;
-      player.set((s) => rq.startRequest(s, next.key));
+      player.set(rq.startRequest(base, next.key));
       void spotify.resume({ uri: item.track.uri, enqueue, skips: 1 }).then((ok) => {
-        if (!ok && running) restoreRequests(before, next.key);
+        if (!ok && running) restoreRequests(base, next.key);
       });
       return;
     }
-    if (next.resume === 'none') return spotify.nudge();
-    player.set(vd.resumeContext);
+    if (next.resume === 'none') {
+      player.set(base);
+      return spotify.nudge();
+    }
+    player.set(vd.resumeContext(base));
     void spotify.resume(next.resume === 'restart' ? { restart: true } : { skips: 1 }).then((ok) => {
       if (!ok) spotify.nudge();
     });
@@ -483,7 +488,9 @@ export function createBrain(options: BrainOptions) {
     if (video) {
       // Час відэа паміж паведамленнямі плэера (раз у секунду) лічым самі — для дока.
       player.set((s) => q.advanceProgress(s, delta));
-      if (vd.videoStalled(player.get(), now, options.videoSilenceMs)) finishVideo('stalled');
+      if (vd.videoStalled(player.get(), now, options.videoSilenceMs) || vd.videoNotStarting(player.get(), now, options.videoStartMs)) {
+        finishVideo('stalled');
+      }
     }
     if (spotifyMode) {
       if (!video) player.set((s) => q.advanceProgress(s, delta));

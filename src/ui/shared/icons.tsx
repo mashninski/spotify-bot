@@ -20,6 +20,21 @@ export function SpotifyLogo({ size = 28 }: IconProps) {
   );
 }
 
+/** Значок у стылі YouTube: чырвоны скруглены прамавугольнік з белым трохвугольнікам (ADR-020). */
+export function YouTubeLogo({ size = 28 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="0.5" y="4" width="23" height="16" rx="4.8" fill="#ff0000" />
+      <path d="M9.6 8.4v7.2l6.2-3.6z" fill="#ffffff" />
+    </svg>
+  );
+}
+
+/** Маленькі значок крыніцы каля песні або відэа ў чарзе. */
+export function SourceIcon({ source, size = 11 }: IconProps & { source?: 'spotify' | 'youtube' }) {
+  return source === 'youtube' ? <YouTubeLogo size={size} /> : <SpotifyLogo size={size} />;
+}
+
 export function PlayIcon({ size = 20 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

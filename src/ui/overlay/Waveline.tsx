@@ -7,6 +7,8 @@ interface Props {
   /** Апошні ўзровень гуку 0…1; чытаецца кожны кадр без перамалёўкі кампанента. */
   levelRef: { current: number };
   playing: boolean;
+  /** Падчас відэа YouTube хваля чырвоная (ADR-020); колер мяняецца плаўна. */
+  video?: boolean;
   width: number;
   height: number;
 }
@@ -17,10 +19,18 @@ const LINES = [
   { alpha: 0.22, width: 1.2, speed: 0.45, phase: 4.2, freq: 0.8 },
 ];
 
-export function Waveline({ levelRef, playing, width, height }: Props) {
+/** Колеры хвалі: Spotify і YouTube (тое ж, што `--accent` у overlay.css). */
+const GREEN = [30, 215, 96];
+const RED = [255, 64, 64];
+/** Колькі ідзе змена колеру (тое ж, што пераход `--accent`). */
+const COLOR_MS = 900;
+
+export function Waveline({ levelRef, playing, video = false, width, height }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playingRef = useRef(playing);
   playingRef.current = playing;
+  const videoRef = useRef(video);
+  videoRef.current = video;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -35,6 +45,8 @@ export function Waveline({ levelRef, playing, width, height }: Props) {
     let last = performance.now();
     let level = 0;
     let time = 0;
+    /** 0 — зялёная, 1 — чырвоная. */
+    let mix = videoRef.current ? 1 : 0;
 
     const draw = (now: number) => {
       const dt = Math.min(100, now - last);
@@ -43,6 +55,11 @@ export function Waveline({ levelRef, playing, width, height }: Props) {
       level = smoothLevel(level, target, dt);
       // Хваля рухаецца хутчэй, калі гучней; на паўзе амаль спыняецца.
       time += (dt / 1000) * (playingRef.current ? 1.2 + level * 3 : 0.25);
+
+      const goal = videoRef.current ? 1 : 0;
+      mix += Math.sign(goal - mix) * Math.min(Math.abs(goal - mix), dt / COLOR_MS);
+      const ease = mix * mix * (3 - 2 * mix);
+      const rgb = GREEN.map((g, i) => Math.round(g + (RED[i] - g) * ease)).join(', ');
 
       ctx.clearRect(0, 0, width, height);
       const mid = height / 2;
@@ -61,7 +78,7 @@ export function Waveline({ levelRef, playing, width, height }: Props) {
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = `rgba(30, 215, 96, ${line.alpha})`;
+        ctx.strokeStyle = `rgba(${rgb}, ${line.alpha})`;
         ctx.lineWidth = line.width;
         ctx.lineCap = 'round';
         ctx.stroke();

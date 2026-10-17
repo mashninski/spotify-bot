@@ -60,6 +60,7 @@ export interface BrainNodeOptions {
   youtubeFetch?: YouTubeFetch;
   videoProbe?: VideoProbe;
   videoSilenceMs?: number;
+  videoStartMs?: number;
 }
 
 export function createBrainNode(options: BrainNodeOptions) {
@@ -135,6 +136,7 @@ export function createBrainNode(options: BrainNodeOptions) {
       youtubeFetch: options.youtubeFetch,
       videoProbe: options.videoProbe,
       videoSilenceMs: options.videoSilenceMs,
+      videoStartMs: options.videoStartMs,
     });
     const heartbeat = setInterval(postSnapshot, SNAPSHOT_HEARTBEAT_MS);
     leaderStopFns.push(
