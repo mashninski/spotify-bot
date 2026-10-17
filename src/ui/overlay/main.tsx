@@ -2,6 +2,8 @@ import { render } from 'preact';
 import { electLeader, getLockManager, VIDEO_LOCK } from '../../brain/leader';
 import { createBrainNode } from '../../brain/node';
 import { createStore } from '../../core/store';
+import { currentVideo } from '../../core/video';
+import { watchForUpdates } from '../shared/update';
 import { Overlay, type OverlayOptions } from './Overlay';
 import './overlay.css';
 
@@ -33,7 +35,14 @@ if (node) {
   const locks = getLockManager();
   const election = locks ? electLeader(locks, () => videoOwner.set(true), VIDEO_LOCK) : null;
   if (!locks) videoOwner.set(true);
+  // Раз у 5 с — мозгу пра сябе: «Стан» паказвае, колькі оверлэяў адкрыта і якой яны версіі.
+  const status = () => node.reportOverlay(videoOwner.get(), __APP_VERSION__);
+  status();
+  const statusTimer = setInterval(status, 5000);
+  // Новая версія — перазагрузка, але не пасярэдзіне відэа.
+  watchForUpdates(() => !currentVideo(node.player.get()));
   window.addEventListener('pagehide', () => {
+    clearInterval(statusTimer);
     election?.stop();
     node.stop();
   });

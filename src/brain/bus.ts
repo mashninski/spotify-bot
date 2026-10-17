@@ -47,9 +47,22 @@ export interface YouTubeInfo {
   /** Колькі разоў YouTube уключаў рэкламу перад відэа (з запуску бота) і калі апошні раз — па гэтым правяраем Premium. */
   ads: number;
   lastAdAt: number;
+  /** Адкрытыя оверлэі (паведамлялі пра сябе за апошнія 15 с): колькі, колькі з гукам, якіх версій. */
+  overlays: number;
+  soundOverlays: number;
+  overlayVersions: string;
 }
 
-export const initialYouTubeInfo = (): YouTubeInfo => ({ playerSeenAt: 0, overlaySource: '', overlayAudio: false, ads: 0, lastAdAt: 0 });
+export const initialYouTubeInfo = (): YouTubeInfo => ({
+  playerSeenAt: 0,
+  overlaySource: '',
+  overlayAudio: false,
+  ads: 0,
+  lastAdAt: 0,
+  overlays: 0,
+  soundOverlays: 0,
+  overlayVersions: '',
+});
 
 export interface Notice {
   id: number;
@@ -75,7 +88,9 @@ export type Command =
   /** Гучнасць Spotify 0…100. */
   | { type: 'volume'; value: number }
   /** Плэер відэа ў оверлэі паведамляе пра ход відэа (ADR-020). */
-  | ({ type: 'video-report' } & VideoReport);
+  | ({ type: 'video-report' } & VideoReport)
+  /** Оверлэй паведамляе пра сябе раз у 5 с: колькі оверлэяў адкрыта, які з гукам, якая версія. */
+  | { type: 'overlay-status'; id: string; owner: boolean; version: string };
 
 /** Усё, што лідар паказвае іншым старонкам. Гісторыя песень не перадаецца — яна патрэбна толькі лідару. */
 export interface BrainSnapshot {
@@ -131,6 +146,9 @@ export function parseCommand(raw: unknown): Command | null {
   }
   if (raw.type === 'volume' && typeof raw.value === 'number' && Number.isFinite(raw.value)) {
     return { type: 'volume', value: Math.max(0, Math.min(100, Math.round(raw.value))) };
+  }
+  if (raw.type === 'overlay-status' && typeof raw.id === 'string' && typeof raw.version === 'string') {
+    return { type: 'overlay-status', id: raw.id.slice(0, 40), owner: raw.owner === true, version: raw.version.slice(0, 40) };
   }
   if (raw.type === 'video-report' && typeof raw.key === 'string' && VIDEO_STATES.includes(raw.state)) {
     const positionMs = typeof raw.positionMs === 'number' && Number.isFinite(raw.positionMs) ? Math.max(0, raw.positionMs) : 0;

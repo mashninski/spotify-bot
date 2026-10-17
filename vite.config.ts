@@ -16,6 +16,16 @@ const version = (() => {
 
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version) },
+  plugins: [
+    {
+      // version.json побач са старонкамі: па ім адкрытыя док і оверлэй даведваюцца пра новую версію (src/ui/shared/update.ts).
+      name: 'version-json',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version }) });
+      },
+    },
+  ],
   // Адносныя шляхі ў зборцы: старонкі можна размясціць у любой папцы хостынгу.
   base: './',
   oxc: {

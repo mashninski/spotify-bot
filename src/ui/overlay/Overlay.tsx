@@ -154,6 +154,9 @@ function VideoCard({ node, demo, demoVideoId, owner }: { node: BrainNode | null;
 
   useEffect(() => {
     if (!host.current) return;
+    // Плэер не павінен атрымліваць фокус: з фокусам YouTube трымае на экране свой інтэрфейс.
+    host.current.setAttribute('inert', '');
+    host.current.tabIndex = -1;
     const p = createVideoPlayer({
       host: host.current,
       onReport: (report) => node?.reportVideo(report),

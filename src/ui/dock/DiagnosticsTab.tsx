@@ -36,6 +36,14 @@ function YouTubeBlock({ controller }: { controller: DockController }) {
       <Row label={t('diag.youtube.audio')} tone={audio ? '' : 'muted'}>
         {audio || t('diag.youtube.audio.simulated')}
       </Row>
+      <Row label={t('diag.youtube.overlays')} tone={youtube.overlays === 1 ? '' : 'bad'}>
+        {t('diag.youtube.overlays.value', { n: youtube.overlays ?? 0, sound: youtube.soundOverlays ?? 0 })}
+      </Row>
+      {youtube.overlayVersions && (
+        <Row label={t('diag.youtube.overlayVersion')} tone={youtube.overlayVersions === __APP_VERSION__ ? '' : 'bad'}>
+          {youtube.overlayVersions}
+        </Row>
+      )}
       <Row label={t('diag.youtube.ads')} tone={youtube.ads ? 'bad' : 'good'}>
         {youtube.ads ? `${youtube.ads} · ${clock(youtube.lastAdAt)}` : 0}
       </Row>

@@ -456,6 +456,30 @@ export function createBrain(options: BrainOptions) {
     });
   }
 
+  /** Оверлэі, якія паведамлялі пра сябе: id → ці з гукам, версія, калі. */
+  const overlays = new Map<string, { owner: boolean; version: string; at: number }>();
+  const OVERLAY_ALIVE_MS = 15_000;
+
+  function onOverlayStatus(id: string, owner: boolean, version: string): void {
+    const now = Date.now();
+    overlays.set(id, { owner, version, at: now });
+    updateOverlays(now);
+  }
+
+  function updateOverlays(now: number): void {
+    for (const [id, o] of overlays) if (now - o.at > OVERLAY_ALIVE_MS) overlays.delete(id);
+    const list = [...overlays.values()];
+    const patch = {
+      overlays: list.length,
+      soundOverlays: list.filter((o) => o.owner).length,
+      overlayVersions: [...new Set(list.map((o) => o.version))].sort().join(', '),
+    };
+    const info = stores.youtube.get();
+    if (info.overlays !== patch.overlays || info.soundOverlays !== patch.soundOverlays || info.overlayVersions !== patch.overlayVersions) {
+      stores.youtube.set((s) => ({ ...s, ...patch }));
+    }
+  }
+
   /** Паведамленне плэера оверлэя: ход відэа, канец, памылка. */
   function onVideoReport(report: vd.VideoReport): void {
     const now = Date.now();
@@ -517,6 +541,7 @@ export function createBrain(options: BrainOptions) {
     }
     if (loaded) twitch.tick(now);
     checkOverlaySource(now);
+    if (overlays.size && now - lastHeartbeatAt >= HEARTBEAT_MS) updateOverlays(now);
     if (now - lastHeartbeatAt >= HEARTBEAT_MS) {
       lastHeartbeatAt = now;
       checkSpotify();
@@ -824,6 +849,8 @@ export function createBrain(options: BrainOptions) {
         const track = MOCK_REQUEST_TRACKS[Math.floor(Math.random() * MOCK_REQUEST_TRACKS.length)];
         return requestSource.simulate({ user, query: `${track.artist} ${track.title}` });
       }
+      case 'overlay-status':
+        return onOverlayStatus(command.id, command.owner, command.version);
       case 'video-report': {
         const { type: _, ...report } = command;
         return onVideoReport(report);

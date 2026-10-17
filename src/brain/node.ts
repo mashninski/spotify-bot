@@ -257,6 +257,8 @@ export function createBrainNode(options: BrainNodeOptions) {
     setVolume: (value: number) => command({ type: 'volume', value }),
     /** Плэер відэа ў оверлэі паведамляе лідару пра ход відэа (ADR-020). */
     reportVideo: (report: VideoReport) => command({ type: 'video-report', ...report }),
+    /** Оверлэй паведамляе пра сябе: ці ён грае з гукам і якая ў яго версія. */
+    reportOverlay: (owner: boolean, version: string) => command({ type: 'overlay-status', id, owner, version }),
   };
 }
 

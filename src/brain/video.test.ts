@@ -341,6 +341,19 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
   });
 });
 
+describe('відэа YouTube: оверлэі на «Стане»', () => {
+  it('кожны оверлэй паведамляе пра сябе: колькі адкрыта, колькі з гукам, якія версіі', async () => {
+    const { make } = setup();
+    const dock = make('dock');
+    await vi.waitFor(() => expect(dock.isLeader()).toBe(true), WAIT);
+    const a = make('overlay');
+    const b = make('overlay');
+    a.reportOverlay(true, 'v1');
+    b.reportOverlay(false, 'v0');
+    await vi.waitFor(() => expect(dock.youtube.get()).toMatchObject({ overlays: 2, soundOverlays: 1, overlayVersions: 'v0, v1' }), WAIT);
+  });
+});
+
 describe('відэа YouTube: змена лідара', () => {
   it('док зачынілі пасярэдзіне відэа — відэа працягваецца, не дублюецца, музыка — толькі пасля яго', async () => {
     const { make, twitch, spotify } = setup();

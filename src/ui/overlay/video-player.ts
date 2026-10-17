@@ -32,8 +32,12 @@ export interface VideoPlayerOptions {
 
 const REPORT_MS = 1000;
 const IDLE_REPORT_MS = 5000;
-/** Не-ўладальнік падцягвае пазіцыю, калі разышоўся з уладальнікам больш чым на столькі. */
-const MIRROR_DRIFT_MS = 3000;
+/**
+ * Не-ўладальнік падцягвае пазіцыю, толькі калі разышоўся з уладальнікам вельмі моцна, і не часта: пасля кожнай
+ * перамоткі YouTube зноў паказвае свой інтэрфейс (назва, кнопкі) — частыя перамоткі трымалі яго на экране.
+ */
+const MIRROR_DRIFT_MS = 10_000;
+const MIRROR_SEEK_EVERY_MS = 30_000;
 /** Калі відэа так доўга не пачынаецца (браўзер не дае ўключыць з гукам) — уключаем без гуку, каб хоць было відаць. */
 const AUTOPLAY_FALLBACK_MS = 4000;
 /**
@@ -90,6 +94,7 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
   const timer = setInterval(() => tick(), REPORT_MS);
   const watchTimer = setInterval(() => watch(), REVEAL_CHECK_MS);
   let lastIdleAt = 0;
+  let lastMirrorSeekAt = 0;
 
   /** Новае відэа ў плэеры: пачынаем назіранне нанова. */
   function resetWatch(): void {
@@ -262,9 +267,12 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
     if (t.seek !== lastSeek) {
       lastSeek = t.seek;
       player.seekTo(t.positionMs / 1000, true);
-    } else if (!owner) {
+    } else if (!owner && mainStart !== null && Date.now() - lastMirrorSeekAt >= MIRROR_SEEK_EVERY_MS) {
       const own = (player.getCurrentTime() || 0) * 1000;
-      if (Math.abs(own - t.positionMs) > MIRROR_DRIFT_MS) player.seekTo(t.positionMs / 1000, true);
+      if (Math.abs(own - t.positionMs) > MIRROR_DRIFT_MS) {
+        lastMirrorSeekAt = Date.now();
+        player.seekTo(t.positionMs / 1000, true);
+      }
     }
     const state = player.getPlayerState();
     if (t.playing && state !== PlayerState.PLAYING && state !== PlayerState.BUFFERING && state !== PlayerState.ENDED) player.playVideo();
