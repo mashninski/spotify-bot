@@ -53,6 +53,8 @@ const OVERLAY_SOURCE_CHECK_MS = 30_000;
 const VIDEO_STALE_ON_START_MS = 60_000;
 /** Паўтор паўзы Spotify перад відэа, калі першая каманда не прайшла. */
 const PAUSE_RETRY_MS = 1500;
+/** Тэставыя відэа для «+ Тэставая замова» без Spotify. */
+const YOUTUBE_TEST_QUERIES = ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://youtu.be/9bZkp7q19f0', 'https://youtu.be/kJQP7kiw5Fk'];
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -197,7 +199,9 @@ export function createBrain(options: BrainOptions) {
     fetch: options.twitchFetch,
     createSocket: options.createSocket,
     price: (kind) => (kind === 'video' ? settings.get().rules.videoPrice : settings.get().rules.price),
-    readiness: () => {
+    readiness: (kind) => {
+      // Відэа не залежаць ад Spotify (ADR-020, дапаўненне 4): граюць і без яго.
+      if (kind === 'video') return 'ready';
       if (!spotifyMode) return hasTokens(storage) ? 'wait' : 'off';
       const status = stores.spotify.get().status;
       return status === 'ok' ? 'ready' : status === 'connecting' ? 'wait' : 'off';
@@ -241,7 +245,13 @@ export function createBrain(options: BrainOptions) {
     spotifyMode = false;
     spotify.stop();
     stores.spotify.set({ ...initialSpotifyInfo('off'), requestsToday: counter.get() });
-    player.set((s) => ({ ...s, current: null, isPlaying: false, progressMs: 0, context: [], history: [], video: null }));
+    // Відэа, якое грае, Spotify не тычыцца — застаецца (ADR-020, дапаўненне 4).
+    player.set((s) => {
+      const video = vd.currentVideo(s);
+      return video
+        ? { ...s, context: [], history: [], requests: s.requests.filter(playable), video: s.video ? { ...s.video, resume: 'none' } : null }
+        : { ...s, current: null, isPlaying: false, progressMs: 0, context: [], history: [], requests: s.requests.filter(playable), video: null };
+    });
   }
 
   /** Токены з'явіліся (уваход на старонцы вяртання) або зніклі — пераключаем рэжым. */
@@ -391,13 +401,23 @@ export function createBrain(options: BrainOptions) {
    * Відэа скончылася або яго спынілі. `playKey` — замова, якую ўключыць замест наступнай (▶ у доку).
    * Відэа, якое так і не пачало паказвацца (памылка, оверлэя няма), — балы гледачу вяртаюцца.
    */
-  function finishVideo(reason: 'ended' | 'next' | 'failed' | 'stalled' | 'streamer' | 'ad', playKey?: string): void {
+  function finishVideo(
+    reason: 'ended' | 'next' | 'failed' | 'stalled' | 'not-started' | 'streamer' | 'ad',
+    playKey?: string,
+    code?: number,
+  ): void {
     const before = player.get();
     const video = vd.currentVideo(before);
     if (!video || !before.video) return;
-    if (reason === 'failed' || reason === 'stalled') {
+    if (reason === 'failed' || reason === 'stalled' || reason === 'not-started') {
       if (!before.video.started && video.redemptionId) twitch.failed(video.redemptionId, video.track.title);
-      showNotice(t('player.videoFailed', { title: video.track.title }), 'error');
+      // Дакладная прычына — у доку і на «Стане»: так відаць, што здарылася.
+      const text =
+        reason === 'failed'
+          ? t('player.videoFailed.error', { title: video.track.title, code: code ?? 0 })
+          : t(`player.videoFailed.${reason}`, { title: video.track.title });
+      showNotice(text, 'error');
+      stores.youtube.set((s) => ({ ...s, lastError: text, lastErrorAt: Date.now() }));
     } else if (reason === 'ad') {
       // Рэкламу на стрым не пускаем (ADR-020): відэа спынена, гледачу — балы назад.
       if (!before.video.started && video.redemptionId) twitch.failed(video.redemptionId, video.track.title, 'video-ad');
@@ -480,6 +500,18 @@ export function createBrain(options: BrainOptions) {
     }
   }
 
+  /**
+   * Нічога не грае (Spotify не падключаны, закрыты або ў ім нічога няма), а першае ў чарзе — відэа: яно пачынаецца само.
+   * Калі стрымер сам паставіў музыку на паўзу — відэа чакае ▶ або «Наступная» ў доку.
+   */
+  function idleVideo(): boolean {
+    const s = player.get();
+    const first = s.requests[0];
+    if (!first || !isVideo(first.track) || s.current || vd.currentVideo(s)) return false;
+    // Са Spotify — толькі калі ён ужо адказаў (інакш можам пачаць відэа паверх музыкі, пра якую яшчэ не ведаем).
+    return !spotifyMode || stores.spotify.get().status === 'ok';
+  }
+
   /** Паведамленне плэера оверлэя: ход відэа, канец, памылка. */
   function onVideoReport(report: vd.VideoReport): void {
     const now = Date.now();
@@ -493,7 +525,7 @@ export function createBrain(options: BrainOptions) {
       return;
     }
     if (result.ended) finishVideo('ended');
-    else if (result.failed) finishVideo('failed');
+    else if (result.failed) finishVideo('failed', undefined, report.code);
   }
 
   /** Відэа з мінулага запуску або ад папярэдняга лідара: стан відэа павінен быць, а даўно забытае відэа — не працягваем. */
@@ -520,9 +552,8 @@ export function createBrain(options: BrainOptions) {
     if (video) {
       // Час відэа паміж паведамленнямі плэера (раз у секунду) лічым самі — для дока.
       player.set((s) => q.advanceProgress(s, delta));
-      if (vd.videoStalled(player.get(), now, options.videoSilenceMs) || vd.videoNotStarting(player.get(), now, options.videoStartMs)) {
-        finishVideo('stalled');
-      }
+      if (vd.videoStalled(player.get(), now, options.videoSilenceMs)) finishVideo('stalled');
+      else if (vd.videoNotStarting(player.get(), now, options.videoStartMs)) finishVideo('not-started');
     }
     if (spotifyMode) {
       if (!video) player.set((s) => q.advanceProgress(s, delta));
@@ -533,8 +564,11 @@ export function createBrain(options: BrainOptions) {
       spotify.tick(now);
       const toStart = vd.videoToStart(player.get());
       if (toStart) startVideoNow(toStart.key, 'next');
+      else if (idleVideo()) startVideoNow(player.get().requests[0].key, 'none');
       else sendNextRequest(now);
       checkSpotifyWindow(now);
+    } else if (!video && idleVideo()) {
+      startVideoNow(player.get().requests[0].key, 'none');
     } else if (!video) {
       player.set((s) => q.tick(s, delta));
       if (options.demo && player.get().context.length < CONTEXT_MIN) void refillContext();
@@ -633,7 +667,6 @@ export function createBrain(options: BrainOptions) {
     if (kind === 'video') {
       const videoId = parseYouTubeLink(request.query);
       if (!videoId) return { ok: false, reason: 'not-youtube', video: true };
-      if (!spotifyMode && request.redemptionId) return { ok: false, reason: 'spotify-off', video: true };
       const found = await findVideo(videoId, { fetch: youtubeFetch, probe: videoProbe });
       if (!running) return null;
       return found.ok ? { track: found.track } : { ok: false, reason: found.reason, video: true };
@@ -783,6 +816,9 @@ export function createBrain(options: BrainOptions) {
     const video = vd.currentVideo(player.get());
     switch (command.type) {
       case 'toggle-play': {
+        // Нічога не загружана, а ў чарзе відэа — ▶ пачынае чаргу.
+        const first = player.get().requests[0];
+        if (!player.get().current && first && isVideo(first.track)) return startVideoNow(first.key, 'none');
         // Відэа ставіць на паўзу плэер оверлэя: ён сочыць за `isPlaying` (ADR-020).
         if (!spotifyMode || video) return player.set(q.togglePlay);
         // Адразу паказваем паўзу/працяг, а калі Spotify не паслухаўся — вяртаем як было.
@@ -846,6 +882,8 @@ export function createBrain(options: BrainOptions) {
           const query = SPOTIFY_TEST_QUERIES[testQueryIndex++ % SPOTIFY_TEST_QUERIES.length];
           return requestSource.simulate({ user, query });
         }
+        // Без Spotify — відэа YouTube (яны граюць і без Spotify); выдуманыя песні — толькі ў тэстах.
+        if (!options.demo) return requestSource.simulate({ user, query: YOUTUBE_TEST_QUERIES[testQueryIndex++ % YOUTUBE_TEST_QUERIES.length] });
         const track = MOCK_REQUEST_TRACKS[Math.floor(Math.random() * MOCK_REQUEST_TRACKS.length)];
         return requestSource.simulate({ user, query: `${track.artist} ${track.title}` });
       }

@@ -131,12 +131,12 @@ describe('Twitch: падключэнне і ўзнагарода', () => {
     await vi.waitFor(() => expect(dock.twitch.get()).toMatchObject({ status: 'error', problem: 'not-affiliate' }), WAIT);
   });
 
-  it('без Spotify узнагарода на паўзе, са Spotify — зноў працуе', async () => {
+  it('без Spotify на паўзе толькі «Замовіць песню» (відэа працуе), са Spotify — абедзве', async () => {
     const { make, twitch, storage } = setup({ spotify: false });
     const dock = make('dock');
     await ready(twitch);
-    await vi.waitFor(() => expect(twitch.state.rewards.map((r) => r.is_paused)).toEqual([true, true]), { ...WAIT, timeout: 12_000 });
-    await vi.waitFor(() => expect(dock.twitch.get()).toMatchObject({ reward: { paused: true }, videoReward: { paused: true } }), WAIT);
+    await vi.waitFor(() => expect(twitch.state.rewards.map((r) => r.is_paused)).toEqual([true, false]), { ...WAIT, timeout: 12_000 });
+    await vi.waitFor(() => expect(dock.twitch.get()).toMatchObject({ reward: { paused: true }, videoReward: { paused: false } }), WAIT);
     saveSpotifyTokens(storage, sampleTokens());
     await vi.waitFor(() => expect(twitch.state.rewards.map((r) => r.is_paused)).toEqual([false, false]), { ...WAIT, timeout: 12_000 });
   }, 30_000);

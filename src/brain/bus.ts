@@ -51,6 +51,9 @@ export interface YouTubeInfo {
   overlays: number;
   soundOverlays: number;
   overlayVersions: string;
+  /** Апошняя прычына, чаму відэа не паказалася (для «Стану»). */
+  lastError?: string;
+  lastErrorAt?: number;
 }
 
 export const initialYouTubeInfo = (): YouTubeInfo => ({

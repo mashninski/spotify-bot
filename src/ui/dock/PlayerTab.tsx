@@ -84,7 +84,8 @@ export function PlayerTab({ controller }: { controller: DockController }) {
             title={state.isPlaying ? t('player.pause') : t('player.play')}
             aria-label={state.isPlaying ? t('player.pause') : t('player.play')}
             onClick={controller.togglePlay}
-            disabled={!current}
+            // Нічога не грае, але ў чарзе ёсць відэа — ▶ пачынае чаргу (і без Spotify).
+            disabled={!current && !state.requests.some((r) => isVideo(r.track))}
           >
             {state.isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
           </button>

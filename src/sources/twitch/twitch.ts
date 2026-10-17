@@ -106,7 +106,7 @@ export interface TwitchLinkOptions {
    * Ці можа бот зараз браць заказы: `ready` — так; `wait` — хутка (Spotify падключаецца), заказы пачакаюць;
    * `off` — не (Spotify не падключаны): баллы вяртаюцца.
    */
-  readiness(): 'ready' | 'wait' | 'off';
+  readiness(kind: RewardKind): 'ready' | 'wait' | 'off';
   /** Пошук песні або відэа і правілы. `null` — мозг спыніўся, заказ апрацуе наступны лідар. */
   onRedemption(request: TwitchRequest): Promise<RequestOutcome | null>;
   player(): PlayerState;
@@ -180,8 +180,9 @@ export function createTwitchLink(options: TwitchLinkOptions) {
   /** Адна аперацыя з Twitch за раз (праверка, узнагарода, статус, паведамленне) — каб не перасягнуць ліміты. */
   let busy = false;
   let nextStepAt = 0;
-  let readySince = 0;
-  let lastReady: boolean | null = null;
+  /** Гатоўнасць кожнай узнагароды (песні патрэбны Spotify, відэа — не) і з якога часу яна такая. */
+  const readySince: Record<RewardKind, number> = { song: 0, video: 0 };
+  const lastReady: Record<RewardKind, boolean | null> = { song: null, video: null };
   let session = '';
   let catchUpNeeded = false;
   let info = initialTwitchInfo('connecting');
@@ -398,12 +399,13 @@ export function createTwitchLink(options: TwitchLinkOptions) {
     }
   }
 
-  /** Апрацаваць заказы этапу `processing`, калі бот гатовы (або вярнуць баллы, калі Spotify не падключаны). */
+  /** Апрацаваць заказы этапу `processing`, калі бот гатовы (або вярнуць баллы, калі песні, а Spotify не падключаны). */
   function processWaiting(): void {
-    const readiness = options.readiness();
-    if (readiness === 'wait') return;
+    const ready: Record<RewardKind, 'ready' | 'wait' | 'off'> = { song: options.readiness('song'), video: options.readiness('video') };
     for (const record of Object.values(log.records)) {
       if (record.stage !== 'processing' || inflight.has(record.id)) continue;
+      const readiness = ready[record.kind ?? 'song'];
+      if (readiness === 'wait') continue;
       if (rl.findItem(options.player(), record.id)) {
         setLog(rl.accept(log, record.id, '', now()));
         continue;
@@ -467,7 +469,7 @@ export function createTwitchLink(options: TwitchLinkOptions) {
   }
 
   /** Паўза ўзнагароды, калі бот не можа браць заказы, кошт і назва з налад. */
-  function rewardPatch(kind: RewardKind, ready: boolean, t0: number): Record<string, unknown> | null {
+  function rewardPatch(kind: RewardKind, t0: number): Record<string, unknown> | null {
     const reward = rewards[kind];
     if (!reward) return null;
     const patch: Record<string, unknown> = {};
@@ -475,7 +477,12 @@ export function createTwitchLink(options: TwitchLinkOptions) {
     if (reward.cost !== cost) patch.cost = cost;
     const title = t(SPECS[kind].title);
     if (reward.title !== title) patch.title = title;
-    if (t0 - startedAt >= PAUSE_SYNC_DELAY_MS && t0 - readySince >= PAUSE_STABLE_MS && reward.isPaused === ready) patch.is_paused = !ready;
+    const ready = options.readiness(kind) === 'ready';
+    if (ready !== lastReady[kind]) {
+      lastReady[kind] = ready;
+      readySince[kind] = t0;
+    }
+    if (t0 - startedAt >= PAUSE_SYNC_DELAY_MS && t0 - readySince[kind] >= PAUSE_STABLE_MS && reward.isPaused === ready) patch.is_paused = !ready;
     if (!reward.isEnabled) patch.is_enabled = true;
     return Object.keys(patch).length ? patch : null;
   }
@@ -506,14 +513,9 @@ export function createTwitchLink(options: TwitchLinkOptions) {
       catchUpNeeded = false;
       await catchUp();
     }
-    const ready = options.readiness() === 'ready';
-    if (ready !== lastReady) {
-      lastReady = ready;
-      readySince = t0;
-    }
     for (const kind of REWARD_KINDS) {
       const reward = rewards[kind];
-      const patch = rewardPatch(kind, ready, t0);
+      const patch = rewardPatch(kind, t0);
       if (!patch || !reward) continue;
       const updated = await api.updateReward(broadcasterId, reward.id, patch);
       rewardCheckedAt[kind] = now();
@@ -568,7 +570,8 @@ export function createTwitchLink(options: TwitchLinkOptions) {
       if (running) return;
       running = true;
       startedAt = now();
-      lastReady = null;
+      lastReady.song = null;
+      lastReady.video = null;
       broadcasterId = '';
       rewards.song = null;
       rewards.video = null;

@@ -47,6 +47,14 @@ function YouTubeBlock({ controller }: { controller: DockController }) {
       <Row label={t('diag.youtube.ads')} tone={youtube.ads ? 'bad' : 'good'}>
         {youtube.ads ? `${youtube.ads} · ${clock(youtube.lastAdAt)}` : 0}
       </Row>
+      {youtube.lastError && youtube.lastErrorAt ? (
+        <>
+          <Row label={t('diag.youtube.lastError')} tone="bad">
+            {clock(youtube.lastErrorAt)}
+          </Row>
+          <p class="muted small">{youtube.lastError}</p>
+        </>
+      ) : null}
     </Section>
   );
 }
@@ -108,7 +116,7 @@ export function DiagnosticsTab({ controller }: { controller: DockController }) {
         </Section>
       )}
 
-      {spotify.status !== 'off' && <YouTubeBlock controller={controller} />}
+      <YouTubeBlock controller={controller} />
 
       <Section title={t('diag.obs')} help={t('diag.obs.help')}>
         <Row label={t('diag.obs.page')}>{env.inObs ? env.version : t('diag.obs.notObs')}</Row>

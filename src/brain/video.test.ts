@@ -56,13 +56,13 @@ function createFakeYouTube() {
 let counter = 0;
 let nodes: BrainNode[] = [];
 
-function setup(opts: { silenceMs?: number; startMs?: number } = {}) {
+function setup(opts: { silenceMs?: number; startMs?: number; spotify?: boolean } = {}) {
   const name = `test-video-${++counter}-${Date.now()}`;
   const storage = memoryStorage();
   const spotify = createFakeSpotify();
   const twitch = createFakeTwitch();
   const youtube = createFakeYouTube();
-  saveSpotifyTokens(storage, sampleTokens());
+  if (opts.spotify !== false) saveSpotifyTokens(storage, sampleTokens());
   saveTokens(storage, sampleTwitchTokens());
   const make = (page: PageKind) => {
     const node = createBrainNode({
@@ -87,13 +87,13 @@ function setup(opts: { silenceMs?: number; startMs?: number } = {}) {
 }
 
 /** Бот падключыўся да Twitch: абедзве ўзнагароды ёсць, падпіскі на жывым злучэнні. */
-async function ready(twitch: ReturnType<typeof createFakeTwitch>, node: BrainNode) {
+async function ready(twitch: ReturnType<typeof createFakeTwitch>, node: BrainNode, spotify = true) {
   await vi.waitFor(() => {
     const live = new Set(twitch.liveSockets().map((s) => s.session));
     expect(twitch.state.subscriptions.filter((s) => live.has(s.session))).toHaveLength(3);
     expect(twitch.state.rewards).toHaveLength(2);
   }, WAIT);
-  await vi.waitFor(() => expect(node.spotify.get().status).toBe('ok'), WAIT);
+  if (spotify) await vi.waitFor(() => expect(node.spotify.get().status).toBe('ok'), WAIT);
 }
 
 const videoReward = (twitch: ReturnType<typeof createFakeTwitch>) => twitch.state.rewards.find((r) => r.title === 'Замовіць відэа з YouTube')!.id;
@@ -338,6 +338,61 @@ describe('відэа YouTube: адмовы з вяртаннем балаў', ()
     report(dock, 'error');
     await vi.waitFor(() => expect(spotify.state.playing).toBe(true), WAIT);
     expect(twitch.statusOf(r.id)).toBe('FULFILLED');
+  });
+});
+
+describe('відэа YouTube без Spotify (ADR-020, дапаўненне 4)', () => {
+  it('Spotify не падключаны: відэа прымаецца, пачынаецца само, адно за адным; песні — адмова', async () => {
+    const { make, twitch } = setup({ spotify: false });
+    const dock = make('dock');
+    await ready(twitch, dock, false);
+    const reward = videoReward(twitch);
+    const a = twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: reward });
+    twitch.redeem('Ales', link('9bZkp7q19f0'), { rewardId: reward });
+    await vi.waitFor(() => expect(dock.player.get().current?.track.videoId).toBe('dQw4w9WgXcQ'), WAIT);
+    expect(dock.player.get().video?.resume).toBe('none');
+    report(dock, 'playing', 1000);
+    await vi.waitFor(() => expect(twitch.statusOf(a.id)).toBe('FULFILLED'), WAIT);
+    report(dock, 'ended', 213_000);
+    await vi.waitFor(() => expect(dock.player.get().current?.track.videoId).toBe('9bZkp7q19f0'), WAIT);
+    report(dock, 'playing', 1000);
+    report(dock, 'ended', 252_000);
+    await vi.waitFor(() => expect(dock.player.get().current).toBeNull(), WAIT);
+    const song = twitch.redeem('Ales', 'Daft Punk Get Lucky');
+    await vi.waitFor(() => expect(twitch.statusOf(song.id)).toBe('CANCELED'), WAIT);
+  });
+
+  it('Spotify на паўзе: відэа чакае ▶ у доку', async () => {
+    const { make, twitch, spotify } = setup();
+    spotify.state.playing = false;
+    const dock = make('dock');
+    await ready(twitch, dock);
+    twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
+    await new Promise((res) => setTimeout(res, 1500));
+    expect(dock.player.get().current?.track.source).toBeUndefined();
+    dock.next();
+    await vi.waitFor(() => expect(dock.player.get().current?.track.source).toBe('youtube'), WAIT);
+    expect(dock.player.get().video?.resume).toBe('none');
+    report(dock, 'playing', 1000);
+    report(dock, 'ended', 213_000);
+    // Музыку стрымер паставіў на паўзу — пасля відэа бот яе не ўключае.
+    await new Promise((res) => setTimeout(res, 1500));
+    expect(spotify.state.playing).toBe(false);
+  });
+
+  it('Spotify адключылі падчас відэа — відэа грае далей', async () => {
+    const { make, twitch, storage } = setup();
+    const dock = make('dock');
+    await ready(twitch, dock);
+    twitch.redeem('Kasia', link('dQw4w9WgXcQ'), { rewardId: videoReward(twitch) });
+    await vi.waitFor(() => expect(dock.player.get().requests).toHaveLength(1), WAIT);
+    dock.next();
+    await vi.waitFor(() => expect(dock.player.get().current?.track.source).toBe('youtube'), WAIT);
+    dock.disconnectSpotify();
+    await vi.waitFor(() => expect(dock.spotify.get().status).toBe('off'), WAIT);
+    expect(dock.player.get().current?.track.source).toBe('youtube');
+    void storage;
   });
 });
 

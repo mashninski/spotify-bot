@@ -57,7 +57,9 @@ export const be = {
   'player.video.not-embeddable': '{user}: відэа «{query}» нельга паказаць на стрыме',
   'player.video.live': '{user}: «{query}» — трансляцыя, такія відэа не прымаюцца',
   'player.video.youtube-failed': '{user}: YouTube не адказаў, «{query}» не дададзена',
-  'player.videoFailed': 'Відэа «{title}» не атрымалася паказаць у оверлэі',
+  'player.videoFailed.error': 'Відэа «{title}»: YouTube не даў яго паказаць (памылка {code})',
+  'player.videoFailed.stalled': 'Відэа «{title}»: оверлэй не адказвае 12 с — ці адкрыты ён у OBS',
+  'player.videoFailed.not-started': 'Відэа «{title}» не пачалося за 90 с — YouTube не аддаў відэа або яно на паўзе (той жа акаўнт YouTube грае ў іншым месцы)',
   'player.videoAd': 'Перад «{title}» YouTube уключыў рэкламу, відэа не паказана',
   'player.videoVolume': 'Гучнасць відэа: {n}%',
   'player.videoVolume.label': 'Гучнасць відэа',
@@ -141,7 +143,7 @@ export const be = {
   'settings.rules.allowExplicit': 'Дазволіць explicit',
   'settings.twitch': 'Twitch',
   'settings.twitch.help':
-    'Twitch патрэбны, каб гледачы замаўлялі песні за балы канала, а бот адказваў ім у чаце ад вашага імя\n\n1. Устаўце ў поле Client ID — яго паказвае старонка вашага прыкладання на dev.twitch.tv/console\n2. Націсніце «Падключыць Twitch», у браўзеры адкрыецца twitch.tv/activate\n3. Увайдзіце пад акаўнтам свайго канала і праверце, што код такі ж, як у доку\n4. Дазвольце доступ, док падключыцца сам\n\nБот створыць узнагароды «Замовіць песню» і «Замовіць відэа з YouTube» з коштам з налад. Пакуль Spotify не падключаны або OBS закрыты, узнагароды стаяць на паўзе\n\nУваход дзейнічае, пакуль вы адкрываеце OBS з ботам хоць бы раз на 30 дзён',
+    'Twitch патрэбны, каб гледачы замаўлялі песні за балы канала, а бот адказваў ім у чаце ад вашага імя\n\n1. Устаўце ў поле Client ID — яго паказвае старонка вашага прыкладання на dev.twitch.tv/console\n2. Націсніце «Падключыць Twitch», у браўзеры адкрыецца twitch.tv/activate\n3. Увайдзіце пад акаўнтам свайго канала і праверце, што код такі ж, як у доку\n4. Дазвольце доступ, док падключыцца сам\n\nБот створыць узнагароды «Замовіць песню» і «Замовіць відэа з YouTube» з коштам з налад. Пакуль OBS закрыты, узнагароды стаяць на паўзе. Без Spotify на паўзе толькі «Замовіць песню»: відэа граюць і без Spotify\n\nУваход дзейнічае, пакуль вы адкрываеце OBS з ботам хоць бы раз на 30 дзён',
   'settings.twitch.clientId': 'Client ID',
   'settings.twitch.badClientId': 'Client ID — гэта 30 сімвалаў: лічбы і малыя лацінскія літары',
   'settings.twitch.connect': 'Падключыць Twitch',
@@ -158,7 +160,7 @@ export const be = {
   'settings.twitch.reward.paused': 'Узнагарода «Замовіць песню» на паўзе, пакуль не падключаны Spotify',
   'settings.twitch.reward.none': 'Рыхтую ўзнагароду «Замовіць песню»…',
   'settings.twitch.videoReward.active': 'Узнагарода «Замовіць відэа з YouTube» працуе, кошт — {cost}',
-  'settings.twitch.videoReward.paused': 'Узнагарода «Замовіць відэа з YouTube» на паўзе, пакуль не падключаны Spotify',
+  'settings.twitch.videoReward.paused': 'Узнагарода «Замовіць відэа з YouTube» на паўзе',
   'settings.twitch.videoReward.none': 'Рыхтую ўзнагароду «Замовіць відэа з YouTube»…',
   'settings.twitch.problem.network': 'Няма сувязі з Twitch, спрабую зноў…',
   'settings.twitch.problem.not-affiliate':
@@ -260,6 +262,7 @@ export const be = {
   'diag.youtube.overlays': 'Оверлэі',
   'diag.youtube.overlays.value': '{n}, з гукам — {sound}',
   'diag.youtube.overlayVersion': 'Версія оверлэя',
+  'diag.youtube.lastError': 'Апошняя памылка відэа',
   'diag.obs': 'OBS',
   'diag.obs.help':
     'Дзе адкрыты док і як бот перадае даныя ў оверлэй. Памылкі азначаюць, што оверлэй мог не атрымаць частку абнаўленняў',
