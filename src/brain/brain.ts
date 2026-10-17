@@ -57,7 +57,13 @@ const SEARCH_QUERY_MAX = 100;
 /** Паўтор паўзы Spotify перад відэа, калі першая каманда не прайшла. */
 const PAUSE_RETRY_MS = 1500;
 /** Тэставыя відэа для «+ Тэставая замова» без Spotify. */
-const YOUTUBE_TEST_QUERIES = ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://youtu.be/9bZkp7q19f0', 'https://youtu.be/kJQP7kiw5Fk'];
+const YOUTUBE_TEST_QUERIES: Pick<SongRequest, 'query' | 'kind'>[] = [
+  { query: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+  { query: 'https://youtu.be/9bZkp7q19f0' },
+  { query: 'https://youtu.be/kJQP7kiw5Fk' },
+  // Па назве — як ва ўзнагародзе відэа (B-032).
+  { query: 'Hollow Knight Silksong trailer', kind: 'video' },
+];
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -937,7 +943,7 @@ export function createBrain(options: BrainOptions) {
           return requestSource.simulate({ user, query });
         }
         // Без Spotify — відэа YouTube (яны граюць і без Spotify); выдуманыя песні — толькі ў тэстах.
-        if (!options.demo) return requestSource.simulate({ user, query: YOUTUBE_TEST_QUERIES[testQueryIndex++ % YOUTUBE_TEST_QUERIES.length] });
+        if (!options.demo) return requestSource.simulate({ user, ...YOUTUBE_TEST_QUERIES[testQueryIndex++ % YOUTUBE_TEST_QUERIES.length] });
         const track = MOCK_REQUEST_TRACKS[Math.floor(Math.random() * MOCK_REQUEST_TRACKS.length)];
         return requestSource.simulate({ user, query: `${track.artist} ${track.title}` });
       }
