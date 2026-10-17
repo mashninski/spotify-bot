@@ -23,6 +23,11 @@ export interface VideoPlayerOptions {
   onReport(report: VideoReport): void;
   /** Плэер мясцова скончыў або не можа паказаць відэа — оверлэй хавае плашку, не чакаючы мозгу. */
   onLocalEnd(key: string): void;
+  /**
+   * Пара паказаць плашку: відэа ўжо грае, і YouTube схаваў свой інтэрфейс (назва, кнопкі, «Другие видео»),
+   * які ён паказвае першыя секунды.
+   */
+  onReveal(key: string): void;
 }
 
 const REPORT_MS = 1000;
@@ -31,6 +36,13 @@ const IDLE_REPORT_MS = 5000;
 const MIRROR_DRIFT_MS = 3000;
 /** Калі відэа так доўга не пачынаецца (браўзер не дае ўключыць з гукам) — уключаем без гуку, каб хоць было відаць. */
 const AUTOPLAY_FALLBACK_MS = 4000;
+/** Колькі відэа грае, пакуль YouTube не схавае свой інтэрфейс (без мышы ён знікае праз 2–3 с). */
+const REVEAL_AFTER_PLAYING_MS = 3500;
+/**
+ * Найпазней плашка з’яўляецца праз столькі пасля загрузкі, што б ні рабіў плэер: рэкламу і памылкі YouTube
+ * мы не хаваем (правілы YouTube забараняюць схаваны плэер).
+ */
+const REVEAL_MAX_MS = 8000;
 
 function stateName(code: number): VideoPlayerState {
   switch (code) {
@@ -61,9 +73,29 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
   let endedKey = '';
   let fallbackMuted = false;
   let destroyed = false;
+  let revealedKey = '';
+  let reveal: { key: string; at: number; timer: ReturnType<typeof setTimeout> } | null = null;
 
   const timer = setInterval(() => tick(), REPORT_MS);
   let lastIdleAt = 0;
+
+  /** Паказаць плашку відэа `key` праз `delay` (калі раней не паказана і не запланавана раней). */
+  function armReveal(key: string, delay: number): void {
+    if (!key || revealedKey === key) return;
+    const at = Date.now() + delay;
+    if (reveal && reveal.key === key && reveal.at <= at) return;
+    if (reveal) clearTimeout(reveal.timer);
+    reveal = {
+      key,
+      at,
+      timer: setTimeout(() => {
+        reveal = null;
+        if (destroyed || target?.key !== key) return;
+        revealedKey = key;
+        options.onReveal(key);
+      }, delay),
+    };
+  }
 
   function report(state: VideoPlayerState, code?: number): void {
     if (!owner || !target) return;
@@ -101,6 +133,7 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       loadedKey = t.key;
       loadedAt = Date.now();
       lastSeek = t.seek;
+      armReveal(t.key, REVEAL_MAX_MS);
       player = new YT.Player(el, {
         width: '100%',
         height: '100%',
@@ -119,7 +152,10 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
               report('ended');
               options.onLocalEnd(target.key);
             } else if (e.data === PlayerState.PLAYING || e.data === PlayerState.PAUSED) {
-              if (e.data === PlayerState.PLAYING) hideCaptions();
+              if (e.data === PlayerState.PLAYING && target) {
+                hideCaptions();
+                armReveal(target.key, REVEAL_AFTER_PLAYING_MS);
+              }
               report(stateName(e.data));
             }
           },
@@ -157,6 +193,7 @@ export function createVideoPlayer(options: VideoPlayerOptions) {
       loadedKey = t.key;
       loadedAt = Date.now();
       lastSeek = t.seek;
+      armReveal(t.key, REVEAL_MAX_MS);
       endedKey = '';
       fallbackMuted = false;
       applySound();

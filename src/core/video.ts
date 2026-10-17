@@ -13,7 +13,7 @@ export const PLAYER_SILENCE_MS = 12_000;
  * Плэер жывы, але відэа так доўга не пачынаецца (YouTube не аддае відэа, браўзер не дае ўключыць) — паказаць не атрымалася.
  * З запасам на рэкламу перад відэа, падчас якой час відэа не ідзе.
  */
-export const VIDEO_START_TIMEOUT_MS = 60_000;
+export const VIDEO_START_TIMEOUT_MS = 90_000;
 
 /** Што паведамляе плэер оверлэя. */
 export type VideoPlayerState = 'loading' | 'playing' | 'paused' | 'buffering' | 'ended' | 'error' | 'idle';

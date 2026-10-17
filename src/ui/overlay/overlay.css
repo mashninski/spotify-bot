@@ -73,10 +73,10 @@ body {
   opacity: 1;
   transform: none;
   visibility: visible;
-  /* З’яўляецца пасля таго, як лагатыпы памяняліся месцамі. */
+  /* З’яўляецца, калі відэа ўжо грае і YouTube схаваў свой інтэрфейс (гл. video-player.ts). */
   transition:
-    opacity 0.6s ease 0.35s,
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.35s,
+    opacity 0.6s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
     visibility 0s linear 0s;
 }
 

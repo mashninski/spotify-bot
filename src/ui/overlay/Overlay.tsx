@@ -139,6 +139,8 @@ function VideoCard({ node, demo, owner }: { node: BrainNode | null; demo: boolea
   const host = useRef<HTMLDivElement>(null);
   const control = useRef<ReturnType<typeof createVideoPlayer> | null>(null);
   const [endedKey, setEndedKey] = useState('');
+  /** Відэа, для якога плашку ўжо можна паказаць (YouTube схаваў свой інтэрфейс). */
+  const [revealedKey, setRevealedKey] = useState('');
   const isOwner = useStore(owner);
   const player = useStore(node?.player ?? NO_PLAYER);
   const volume = useStore(node?.settings ?? NO_SETTINGS).video.volume;
@@ -146,7 +148,7 @@ function VideoCard({ node, demo, owner }: { node: BrainNode | null; demo: boolea
   const target: VideoTarget | null = demo
     ? { key: 'demo-video', videoId: DEMO_VIDEO_ID, positionMs: 0, playing: true, seek: 0 }
     : videoTarget(player);
-  const visible = Boolean(target && target.key !== endedKey);
+  const visible = Boolean(target && target.key !== endedKey && target.key === revealedKey);
 
   useEffect(() => {
     if (!host.current) return;
@@ -154,6 +156,7 @@ function VideoCard({ node, demo, owner }: { node: BrainNode | null; demo: boolea
       host: host.current,
       onReport: (report) => node?.reportVideo(report),
       onLocalEnd: (key) => setEndedKey(key),
+      onReveal: (key) => setRevealedKey(key),
     });
     control.current = p;
     return () => {
